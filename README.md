@@ -12,13 +12,14 @@ To avoid confusion, use this quick snapshot first:
 - Recruitments API (live): `GET /recruitments`
 - Academics/Departments/Programs: live under `GET /api/v1/...`
 - Communications module: mounted under `GET /api/v1/...`
-- Clubs backend module: not implemented yet (`src/modules/clubs/index.js` is placeholder)
+- Clubs backend module: live under `GET /api/clubs` and `GET /api/v1/clubs`
 
 Database tables currently present for these newer modules:
 
 - `tenders`
 - `recruitments`
 - `recruitment_documents`
+- `clubs`
 
 ## Stack
 
@@ -323,6 +324,9 @@ Security enforcement:
 - Entities: `clubs`, `club_events`, `club_memberships`, `ncc_activities`, `nss_activities`, `campus_facilities`, `campus_content`, `campus_gallery`
 - APIs:
   - `GET /api/clubs`
+  - `GET /api/v1/clubs`
+  - `GET /api/clubs/:id`
+  - `GET /api/v1/clubs/:id`
   - `POST /api/clubs/:id/join`
   - `GET /api/ncc/events`
   - `GET /api/nss/events`
@@ -330,7 +334,7 @@ Security enforcement:
   - `POST /api/nss/register`
   - `GET /api/campus-life/content/:slug`
 - Current status note:
-  - `clubs` module is planned in architecture but not implemented in runtime routes yet.
+  - `clubs` read endpoints are implemented in runtime routes; join workflows remain planned.
 
 ### L. Research + IPR + Incubation + DAC
 
