@@ -3,6 +3,7 @@ const successResponse = (res, message, data = {}, statusCode = 200, pagination) 
     success: true,
     message,
     data,
+    errors: [],
   };
 
   if (pagination) {
@@ -16,6 +17,7 @@ const errorResponse = (res, message, errors = [], statusCode = 400) => {
   return res.status(statusCode).json({
     success: false,
     message,
+    data: null,
     errors,
   });
 };

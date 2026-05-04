@@ -109,6 +109,20 @@ CREATE TABLE news
       ::jsonb
 );
 
+      CREATE TABLE clubs
+      (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        tagline VARCHAR(255),
+        category VARCHAR(100) NOT NULL,
+        logo TEXT,
+        banner TEXT,
+        member_count INT NOT NULL DEFAULT 0,
+        description TEXT,
+        achievements JSONB DEFAULT '[]'::jsonb,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
       CREATE TABLE tenders
       (
         id SERIAL PRIMARY KEY,
@@ -201,6 +215,9 @@ CREATE TABLE news
 
       CREATE INDEX IF NOT EXISTS idx_recruitment_documents_recruitment_active_sort
       ON recruitment_documents(recruitment_id, is_active, sort_order, id);
+
+      CREATE INDEX IF NOT EXISTS idx_clubs_category_name
+      ON clubs(category, name);
 
       CREATE INDEX IF NOT EXISTS idx_users_email
       ON users((LOWER(email)));
@@ -337,6 +354,33 @@ CREATE TABLE news
       (6, 'Tech Symposium 2025', 'Events', '2025', '2025-01-22', '["https://www.gbu.ac.in/Content/gbudata/incubation/Incubation_Pic9.jpg", "https://www.ic3ecsbhi.com/dsf8951%20copy.jpeg"]'::jsonb),
       (7, 'Robotics Workshop & Expo', 'Academic', '2024', '2024-08-10', '["https://www.ux4g.gov.in/assets/img/awareness-workshop/gbu-19-11-24/900x1.webp", "https://static.toiimg.com/thumb/msid-104795413%2Cwidth-1280%2Cheight-720%2Cresizemode-72/104795413.jpg"]'::jsonb),
       (8, 'Faculty Development Program 2024', 'Academic', '2024', '2024-12-12', '["https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=600&q=80"]'::jsonb);
+
+      INSERT INTO clubs
+        (
+        id,
+        name,
+        tagline,
+        category,
+        logo,
+        banner,
+        member_count,
+        description,
+        achievements,
+        created_at
+        )
+      VALUES
+        (
+          1,
+          'Tech Innovators Club',
+          'Building Tomorrow''s Technology Today',
+          'Technical',
+          'https://www.gbu.ac.in/Content/img/club/techno.jpg',
+          'https://www.gbu.ac.in/Content/img/club/techno.jpg',
+          156,
+          'A student-driven community focused on coding, innovation, and practical technology projects.',
+          '["Winner of Inter-University Hackathon 2023", "Organized 15+ technical workshops"]'::jsonb,
+          NOW()
+        );
       INSERT INTO tenders
         (
         id,
@@ -574,6 +618,12 @@ CREATE TABLE news
 );
 
       SELECT setval(
+  pg_get_serial_sequence('clubs', 'id'),
+  COALESCE((SELECT MAX(id) FROM clubs), 1),
+  true
+);
+
+      SELECT setval(
   pg_get_serial_sequence('users', 'id'),
   COALESCE((SELECT MAX(id) FROM users), 1),
   true
@@ -638,6 +688,8 @@ END $$;
       FROM recruitments;
       SELECT COUNT(*) AS recruitment_documents_count
       FROM recruitment_documents;
+      SELECT COUNT(*) AS clubs_count
+      FROM clubs;
       SELECT COUNT(*) AS users_count
       FROM users;
       SELECT COUNT(*) AS auth_refresh_tokens_count

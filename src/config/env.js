@@ -6,7 +6,9 @@ const env = {
   nodeEnv: process.env.NODE_ENV || "development",
   port: Number(process.env.PORT) || 3000,
   host: process.env.HOST || "0.0.0.0",
-  databaseUrl: process.env.DATABASE_URL || "",
+  databaseUrl:
+    process.env.DATABASE_URL ||
+    "postgresql://gbu-user:12345678@localhost:5432/gbu_backend",
   dbSslEnabled: String(process.env.DB_SSL_ENABLED || "false") === "true",
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET || "change-me-access-secret",
   jwtRefreshSecret:
@@ -23,12 +25,19 @@ const env = {
   smtpUser: process.env.SMTP_USER || "",
   smtpPass: process.env.SMTP_PASS || "",
   smtpFrom: process.env.SMTP_FROM || "no-reply@gbu.ac.in",
-  corsOrigin: process.env.CORS_ORIGIN || process.env.APP_BASE_URL || "*",
-  apiRateLimitWindowMs: Number(process.env.API_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  corsOrigin:
+    process.env.CORS_ORIGIN ||
+    process.env.APP_BASE_URL ||
+    "http://localhost:5173",
+  apiRateLimitWindowMs:
+    Number(process.env.API_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   apiRateLimitMax:
     Number(process.env.API_RATE_LIMIT_MAX) ||
-    (String(process.env.NODE_ENV || "development") === "production" ? 300 : 2000),
-  authRateLimitWindowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    (String(process.env.NODE_ENV || "development") === "production"
+      ? 300
+      : 2000),
+  authRateLimitWindowMs:
+    Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX) || 20,
 };
 

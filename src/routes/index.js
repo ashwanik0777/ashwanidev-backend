@@ -4,6 +4,7 @@ const dashboardRoutes = require("../modules/dashboard/dashboard.routes");
 const { successResponse } = require("../utils/response");
 const bookingRoutes = require("../modules/booking");
 const academicRoutes = require("../modules/academics");
+const clubsRoutes = require("../modules/clubs");
 const departmentRoutes = require("../modules/departments");
 const programRoutes = require("../modules/programs");
 const communicationsRoutes = require("../modules/communications");
@@ -25,9 +26,11 @@ router.use("/dashboard", dashboardRoutes);
 
 router.use("/bookings", bookingRoutes);
 router.use("/academics", academicRoutes);
+router.use("/", clubsRoutes);
 
 // Versioned API surface used by frontend integration.
 v1Router.use("/", academicRoutes);
+v1Router.use("/", clubsRoutes);
 v1Router.use("/", departmentRoutes);
 v1Router.use("/", programRoutes);
 v1Router.use("/", communicationsRoutes);
