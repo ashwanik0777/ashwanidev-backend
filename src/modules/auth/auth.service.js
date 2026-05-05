@@ -14,6 +14,18 @@ const portalRoleMap = {
   super_admin: [ROLES.SUPER_ADMIN],
 };
 
+/* ─── All 8 GBU Schools ─── */
+const SCHOOL_SEEDS = [
+  { code: "SOICT", name: "School of Information & Communication Technology", slug: "soict" },
+  { code: "SOBT",  name: "School of Biotechnology",                          slug: "sobt"  },
+  { code: "SOBSC", name: "School of Buddhist Studies & Civilization",         slug: "sobsc" },
+  { code: "SOE",   name: "School of Engineering",                            slug: "soe"   },
+  { code: "SOL",   name: "School of Law, Justice & Governance",              slug: "sol"   },
+  { code: "SOM",   name: "School of Management",                             slug: "som"   },
+  { code: "SOHSS", name: "School of Humanities & Social Sciences",           slug: "sohss" },
+  { code: "SOVS",  name: "School of Vocational Studies & Applied Sciences",  slug: "sovs"  },
+];
+
 const demoUsers = [
   {
     name: "Super Admin",
@@ -21,21 +33,17 @@ const demoUsers = [
     username: "admin",
     role: ROLES.SUPER_ADMIN,
     password: "Admin@123",
+    forceReset: false,
   },
-  {
-    name: "School User",
-    email: "school@gbu.ac.in",
-    username: "school",
-    role: ROLES.SCHOOL,
-    password: "School@123",
-  },
-  {
-    name: "Faculty User",
-    email: "faculty@gbu.ac.in",
-    username: "faculty",
-    role: ROLES.FACULTY,
-    password: "Faculty@123",
-  },
+  // School accounts for each school
+  { name: "SOICT Admin",  email: "soict@gbu.ac.in",  username: "soict",  role: ROLES.SCHOOL, password: "Soict@123",  linkedSchoolCode: "SOICT", forceReset: true },
+  { name: "SOBT Admin",   email: "sobt@gbu.ac.in",   username: "sobt",   role: ROLES.SCHOOL, password: "Sobt@123",   linkedSchoolCode: "SOBT",  forceReset: true },
+  { name: "SOBSC Admin",  email: "sobsc@gbu.ac.in",  username: "sobsc",  role: ROLES.SCHOOL, password: "Sobsc@123",  linkedSchoolCode: "SOBSC", forceReset: true },
+  { name: "SOE Admin",    email: "soe@gbu.ac.in",    username: "soe",    role: ROLES.SCHOOL, password: "Soe@1234",   linkedSchoolCode: "SOE",   forceReset: true },
+  { name: "SOL Admin",    email: "sol@gbu.ac.in",    username: "sol",    role: ROLES.SCHOOL, password: "Sol@1234",   linkedSchoolCode: "SOL",   forceReset: true },
+  { name: "SOM Admin",    email: "som@gbu.ac.in",    username: "som",    role: ROLES.SCHOOL, password: "Som@1234",   linkedSchoolCode: "SOM",   forceReset: true },
+  { name: "SOHSS Admin",  email: "sohss@gbu.ac.in",  username: "sohss",  role: ROLES.SCHOOL, password: "Sohss@123",  linkedSchoolCode: "SOHSS", forceReset: true },
+  { name: "SOVS Admin",   email: "sovs@gbu.ac.in",   username: "sovs",   role: ROLES.SCHOOL, password: "Sovs@123",   linkedSchoolCode: "SOVS",  forceReset: true },
 ];
 
 let authBootstrapped = false;
@@ -118,6 +126,8 @@ const ensureAuthBootstrap = async () => {
       linked_faculty_id VARCHAR(120) NOT NULL DEFAULT '',
       linked_school VARCHAR(80) NOT NULL DEFAULT '',
       linked_department VARCHAR(120) NOT NULL DEFAULT '',
+      linked_school_code VARCHAR(50) NOT NULL DEFAULT '',
+      force_password_reset BOOLEAN NOT NULL DEFAULT FALSE,
       password_updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -128,6 +138,8 @@ const ensureAuthBootstrap = async () => {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS linked_faculty_id VARCHAR(120) NOT NULL DEFAULT '';`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS linked_school VARCHAR(80) NOT NULL DEFAULT '';`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS linked_department VARCHAR(120) NOT NULL DEFAULT '';`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS linked_school_code VARCHAR(50) NOT NULL DEFAULT '';`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS force_password_reset BOOLEAN NOT NULL DEFAULT FALSE;`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
@@ -173,31 +185,50 @@ const ensureAuthBootstrap = async () => {
     `CREATE INDEX IF NOT EXISTS idx_password_reset_otps_user_active ON password_reset_otps(user_id, consumed_at, expires_at, created_at DESC);`,
   );
 
+  // Seed demo users (admin + 8 school accounts)
   for (const item of demoUsers) {
     try {
       const passwordHash = await bcrypt.hash(item.password, 12);
       await query(
         `
-        INSERT INTO users (name, email, username, role, password_hash, is_active, email_verified)
-        VALUES ($1, $2, $3, $4, $5, TRUE, TRUE)
+        INSERT INTO users (name, email, username, role, password_hash, is_active, email_verified, linked_school_code, force_password_reset)
+        VALUES ($1, $2, $3, $4, $5, TRUE, TRUE, $6, $7)
         ON CONFLICT (email) DO UPDATE
-        SET username = COALESCE(users.username, EXCLUDED.username);
+        SET username = COALESCE(users.username, EXCLUDED.username),
+            linked_school_code = CASE WHEN TRIM(COALESCE(users.linked_school_code,'')) = '' THEN EXCLUDED.linked_school_code ELSE users.linked_school_code END;
         `,
-        [item.name, item.email, item.username, item.role, passwordHash],
-      );
-
-      await query(
-        `
-        UPDATE users
-        SET username = $1
-        WHERE LOWER(email) = LOWER($2)
-          AND (username IS NULL OR TRIM(username) = '');
-        `,
-        [item.username, item.email],
+        [item.name, item.email, item.username, item.role, passwordHash, item.linkedSchoolCode || '', item.forceReset || false],
       );
     } catch (err) {
       console.warn(`[Bootstrap] Skipping demo user ${item.email}: ${err.message}`);
     }
+  }
+
+  // Seed the 8 schools into the schools table
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS schools (
+        id SERIAL PRIMARY KEY,
+        code VARCHAR(50) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) UNIQUE NOT NULL,
+        overview TEXT,
+        is_active BOOLEAN DEFAULT true,
+        content JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await query(`ALTER TABLE schools ADD COLUMN IF NOT EXISTS content JSONB DEFAULT '{}'::jsonb;`);
+
+    for (const school of SCHOOL_SEEDS) {
+      await query(
+        `INSERT INTO schools (code, name, slug) VALUES ($1, $2, $3) ON CONFLICT (code) DO NOTHING`,
+        [school.code, school.name, school.slug],
+      );
+    }
+  } catch (err) {
+    console.warn(`[Bootstrap] School seeding: ${err.message}`);
   }
 
   authBootstrapped = true;

@@ -177,65 +177,74 @@ router.get("/schools/:id", async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════════════════════
-   ADMIN ENDPOINTS
+   PUBLIC: get school by short code
    ═══════════════════════════════════════════════════════════════ */
 
-router.post("/admin/schools", authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res) => {
-	try {
-		await ensureAcademicsInfrastructure();
-		const { code, name, overview, content, is_active } = req.body;
-		if (!code || !name) {
-			return errorResponse(res, "Validation failed", [
-				{ field: "code", message: "School code is required" },
-				{ field: "name", message: "School name is required" },
-			], 400);
-		}
+router.get("/schools/code/:code", async (req, res) => {
+  const { code } = req.params;
+  try {
+    await ensureAcademicsInfrastructure();
+    const schoolResult = await query(
+      `
+      SELECT
+        s.id, s.code, s.name, s.slug, s.overview, s.content, s.is_active,
+        s.created_at, s.updated_at,
+        COUNT(d.id) AS department_count
+      FROM schools s
+      LEFT JOIN departments d ON d.school_id = s.id
+      WHERE LOWER(s.code) = LOWER($1)
+      GROUP BY s.id
+      `,
+      [code]
+    );
 
-		const slug = String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-		const isActive = is_active !== undefined ? is_active : true;
+    if (!schoolResult.rows.length) {
+      return errorResponse(res, "School not found", [{ field: "code", message: "No school found for the provided code" }], 404);
+    }
 
-		const result = await query(
-			`
-			INSERT INTO schools (code, name, slug, overview, content, is_active)
-			VALUES ($1, $2, $3, $4, $5::jsonb, $6)
-			RETURNING id, code, name, slug, overview, content, is_active, created_at, updated_at
-			`,
-			[code, name, slug, overview || null, JSON.stringify(content || {}), isActive]
-		);
+    const departmentsResult = await query(
+      `SELECT id, code, name, slug, about, is_active FROM departments WHERE school_id = $1 ORDER BY name ASC`,
+      [schoolResult.rows[0].id]
+    );
 
-		return successResponse(res, "School created successfully", mapSchoolRow(result.rows[0]), 201);
-	} catch (error) {
-		if (error.code === '23505') {
-			return errorResponse(res, "Duplicate school", [{ field: "school", message: "School code or slug already exists" }], 409);
-		}
-		return errorResponse(res, "Failed to create school", [{ field: "school", message: error.message }], 500);
-	}
+    return successResponse(res, "School fetched successfully", {
+      ...mapSchoolRow(schoolResult.rows[0]),
+      departments: departmentsResult.rows.map((d) => ({
+        id: d.id, code: d.code, name: d.name, slug: d.slug, about: d.about, isActive: d.is_active,
+      })),
+    });
+  } catch (error) {
+    return errorResponse(res, "Failed to fetch school", [{ field: "school", message: error.message }], 500);
+  }
 });
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN ENDPOINTS — Schools are pre-seeded; admin can only UPDATE
+   ═══════════════════════════════════════════════════════════════ */
 
 router.put("/admin/schools/:id", authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res) => {
 	try {
 		await ensureAcademicsInfrastructure();
 		const schoolId = Number(req.params.id);
-		const { code, name, overview, content, is_active } = req.body;
+		const { name, overview, content, is_active } = req.body;
 
-		if (!code || !name) {
+		if (!name) {
 			return errorResponse(res, "Validation failed", [
-				{ field: "code", message: "School code is required" },
 				{ field: "name", message: "School name is required" },
 			], 400);
 		}
 
-		const slug = String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+		// code and slug are immutable for pre-seeded schools
 		const isActive = is_active !== undefined ? is_active : true;
 
 		const result = await query(
 			`
 			UPDATE schools
-			SET code = $1, name = $2, slug = $3, overview = $4, content = $5::jsonb, is_active = $6, updated_at = NOW()
-			WHERE id = $7
+			SET name = $1, overview = $2, content = $3::jsonb, is_active = $4, updated_at = NOW()
+			WHERE id = $5
 			RETURNING id, code, name, slug, overview, content, is_active, created_at, updated_at
 			`,
-			[code, name, slug, overview || null, JSON.stringify(content || {}), isActive, schoolId]
+			[name, overview || null, JSON.stringify(content || {}), isActive, schoolId]
 		);
 
 		if (!result.rows.length) {
@@ -245,27 +254,11 @@ router.put("/admin/schools/:id", authenticate, authorize(ROLES.SUPER_ADMIN), asy
 		return successResponse(res, "School updated successfully", mapSchoolRow(result.rows[0]));
 	} catch (error) {
 		if (error.code === '23505') {
-			return errorResponse(res, "Duplicate school", [{ field: "school", message: "School code or slug already exists" }], 409);
+			return errorResponse(res, "Duplicate school", [{ field: "school", message: "School name already exists" }], 409);
 		}
 		return errorResponse(res, "Failed to update school", [{ field: "school", message: error.message }], 500);
 	}
 });
 
-router.delete("/admin/schools/:id", authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res) => {
-	try {
-		await ensureAcademicsInfrastructure();
-		const schoolId = Number(req.params.id);
-
-		const result = await query(`DELETE FROM schools WHERE id = $1 RETURNING id`, [schoolId]);
-
-		if (!result.rows.length) {
-			return errorResponse(res, "School not found", [], 404);
-		}
-
-		return successResponse(res, "School deleted successfully", { id: schoolId });
-	} catch (error) {
-		return errorResponse(res, "Failed to delete school", [{ field: "school", message: error.message }], 500);
-	}
-});
-
 module.exports = router;
+

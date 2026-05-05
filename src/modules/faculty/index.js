@@ -98,6 +98,7 @@ const ensureFacultyInfrastructure = async () => {
 		"tags JSONB NOT NULL DEFAULT '[]'::jsonb",
 		"research_areas JSONB NOT NULL DEFAULT '[]'::jsonb",
 		"tab_data JSONB NOT NULL DEFAULT '{}'::jsonb",
+		"school_code VARCHAR(50) NOT NULL DEFAULT ''",
 	];
 
 	for (const col of alterCols) {
@@ -106,6 +107,7 @@ const ensureFacultyInfrastructure = async () => {
 	}
 
 	await query(`CREATE INDEX IF NOT EXISTS idx_faculty_profiles_school ON faculty_profiles((LOWER(school)));`);
+	await query(`CREATE INDEX IF NOT EXISTS idx_faculty_profiles_school_code ON faculty_profiles((LOWER(school_code)));`);
 	await query(`CREATE INDEX IF NOT EXISTS idx_faculty_profiles_department ON faculty_profiles((LOWER(department)));`);
 	await query(`CREATE INDEX IF NOT EXISTS idx_faculty_profiles_name ON faculty_profiles((LOWER(name)));`);
 	await query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_faculty_profiles_email_unique ON faculty_profiles((LOWER(email))) WHERE TRIM(email) <> '';`);
@@ -148,7 +150,7 @@ router.get("/faculty/public", async (req, res) => {
 			clauses.push(`(LOWER(name) LIKE $${idx} OR LOWER(COALESCE(designation,'')) LIKE $${idx} OR LOWER(COALESCE(department,'')) LIKE $${idx})`);
 		}
 		if (dept) { params.push(dept); clauses.push(`LOWER(COALESCE(department,'')) = $${params.length}`); }
-		if (school) { params.push(school); clauses.push(`LOWER(COALESCE(school,'')) = $${params.length}`); }
+		if (school) { params.push(school); clauses.push(`(LOWER(COALESCE(school_code,'')) = $${params.length} OR LOWER(COALESCE(school,'')) = $${params.length})`); }
 
 		const where = clauses.join(" AND ");
 		const countRes = await query(`SELECT COUNT(*)::INT AS total FROM faculty_profiles WHERE ${where}`, params);
@@ -368,7 +370,7 @@ router.post("/admin/faculty", adminAuth, async (req, res) => {
 		}
 		
 		const targetSchool = normalize(b.school);
-		const targetSchoolCode = targetSchool.toLowerCase() === 'soict' || targetSchool.toLowerCase().includes('information') ? 'soict' : targetSchool;
+		const targetSchoolCode = normalize(b.school_code) || targetSchool.toUpperCase();
 
 		const result = await query(
 			`INSERT INTO faculty_profiles (
@@ -430,7 +432,7 @@ router.put("/admin/faculty/:id", adminAuth, async (req, res) => {
 		}
 
 		const targetSchool = normalize(b.school);
-		const targetSchoolCode = targetSchool.toLowerCase() === 'soict' || targetSchool.toLowerCase().includes('information') ? 'soict' : targetSchool;
+		const targetSchoolCode = normalize(b.school_code) || targetSchool.toUpperCase();
 
 		const result = await query(
 			`UPDATE faculty_profiles SET
