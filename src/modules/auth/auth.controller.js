@@ -63,24 +63,29 @@ const adminLoginHandler = createRoleLoginHandler("admin", "Admin");
 
 
 const verifyLoginOtpHandler = async (req, res) => {
-  const email = String(req.body?.email || "").trim();
-  const otp = String(req.body?.otp || "").trim();
-  const newPassword = req.body?.newPassword;
+  try {
+    const email = String(req.body?.email || "").trim();
+    const otp = String(req.body?.otp || "").trim();
+    const newPassword = req.body?.newPassword;
 
-  if (!email || !otp) {
-    return errorResponse(res, "Validation failed", [{ field: "email", message: "Email and OTP are required" }], 400);
+    if (!email || !otp) {
+      return errorResponse(res, "Validation failed", [{ field: "email", message: "Email and OTP are required" }], 400);
+    }
+
+    const result = await verifyLoginOtp(email, otp, newPassword, {
+      userAgent: req.get("user-agent"),
+      ipAddress: req.ip,
+    });
+
+    if (!result.success) {
+      return errorResponse(res, "Verification failed", [{ field: "otp", message: result.message }], 400);
+    }
+
+    return successResponse(res, "Login verified successfully", result.data, 200);
+  } catch (error) {
+    console.error("verifyLoginOtp error:", error);
+    return errorResponse(res, "Something went wrong", [{ field: "otp", message: error.message }], 500);
   }
-
-  const result = await verifyLoginOtp(email, otp, newPassword, {
-    userAgent: req.get("user-agent"),
-    ipAddress: req.ip,
-  });
-
-  if (!result.success) {
-    return errorResponse(res, "Verification failed", [{ field: "otp", message: result.message }], 400);
-  }
-
-  return successResponse(res, "Login verified successfully", result.data, 200);
 };
 
 const refreshHandler = async (req, res) => {

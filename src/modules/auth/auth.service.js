@@ -354,7 +354,7 @@ const verifyLoginOtp = async (email, otp, newPassword, requestMeta = {}) => {
      const passwordError = assertStrongPassword(newPassword);
      if (passwordError) return { success: false, message: passwordError };
      const newPasswordHash = await bcrypt.hash(newPassword, 12);
-     await query(`UPDATE users SET password_hash = $2, force_password_reset = FALSE WHERE id = $1`, [newPasswordHash, user.id]);
+     await query(`UPDATE users SET password_hash = $2, force_password_reset = FALSE WHERE id = $1`, [user.id, newPasswordHash]);
   }
 
   await query(`UPDATE password_reset_otps SET consumed_at = NOW() WHERE id = $1`, [activeOtp.id]);
