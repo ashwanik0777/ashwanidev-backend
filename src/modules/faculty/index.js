@@ -380,7 +380,7 @@ router.post("/admin/faculty", adminAuth, async (req, res) => {
 				short_bio, full_bio, office, image_url, faculty_url, cv_link,
 				google_scholar, orcid, tags, research_areas, tab_data,
 				created_by, updated_by, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22::jsonb,$23::jsonb,$24,$25,$26,NOW())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23::jsonb,$24::jsonb,$25,$26,NOW())
 			RETURNING ${FULL_SELECT}`,
 			[
 				id, name, normalize(b.designation), normalize(b.department), targetSchool, targetSchoolCode,
