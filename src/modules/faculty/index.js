@@ -371,6 +371,7 @@ router.post("/admin/faculty", adminAuth, async (req, res) => {
 		
 		const targetSchool = normalize(b.school);
 		const targetSchoolCode = normalize(b.school_code) || targetSchool.toUpperCase();
+		const facultyEmail = normalize(b.email).toLowerCase();
 
 		const result = await query(
 			`INSERT INTO faculty_profiles (
@@ -379,11 +380,11 @@ router.post("/admin/faculty", adminAuth, async (req, res) => {
 				short_bio, full_bio, office, image_url, faculty_url, cv_link,
 				google_scholar, orcid, tags, research_areas, tab_data,
 				created_by, updated_by, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22::jsonb,$23::jsonb,$24,$25,NOW())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22::jsonb,$23::jsonb,$24,$25,$26,NOW())
 			RETURNING ${FULL_SELECT}`,
 			[
 				id, name, normalize(b.designation), normalize(b.department), targetSchool, targetSchoolCode,
-				normalize(b.email).toLowerCase(), normalize(b.phone), b.isActive !== false,
+				facultyEmail, normalize(b.phone), b.isActive !== false,
 				normalize(b.specialization), toSafeInt(b.experience_years, 0), toSafeInt(b.publications, 0),
 				normalize(b.education), normalize(b.shortBio), normalize(b.fullBio),
 				normalize(b.office), normalize(b.image_url), normalize(b.faculty_url),
@@ -396,7 +397,55 @@ router.post("/admin/faculty", adminAuth, async (req, res) => {
 			]
 		);
 
-		return successResponse(res, "Faculty profile created successfully", mapFacultyFull(result.rows[0]), 201);
+		const createdFaculty = mapFacultyFull(result.rows[0]);
+		let loginAccount = null;
+
+		// Auto-create login account if requested
+		const shouldCreateLogin = b.createLoginAccount === true || b.createLoginAccount === "true";
+		if (shouldCreateLogin && facultyEmail) {
+			try {
+				// Check if login account already exists for this faculty
+				const existingUser = await query(
+					`SELECT id FROM users WHERE LOWER(COALESCE(linked_faculty_id,'')) = LOWER($1) LIMIT 1`,
+					[id]
+				);
+
+				if (!existingUser.rows.length) {
+					const bcrypt = require('bcryptjs');
+					const firstName = name.split(' ')[0];
+					const currentYear = new Date().getFullYear();
+					const plainPassword = b.password || `${firstName}${currentYear}`;
+					const passwordHash = await bcrypt.hash(plainPassword, 10);
+					const username = facultyEmail.split('@')[0] || id;
+
+					// Check if username already exists
+					const existingUsername = await query(
+						`SELECT id FROM users WHERE LOWER(username) = LOWER($1) LIMIT 1`,
+						[username]
+					);
+
+					const finalUsername = existingUsername.rows.length
+						? `${username}${Date.now().toString().slice(-4)}`
+						: username;
+
+					await query(
+						`INSERT INTO users (username, email, name, role, password_hash, linked_faculty_id, linked_school_code, force_password_reset) 
+						 VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE) RETURNING id`,
+						[finalUsername, facultyEmail, name, ROLES.FACULTY, passwordHash, id, targetSchoolCode]
+					);
+
+					loginAccount = { username: finalUsername, password: plainPassword };
+				}
+			} catch (loginErr) {
+				// Log but don't fail the entire request – faculty was created successfully
+				console.error("Auto-create login account failed:", loginErr.message);
+			}
+		}
+
+		return successResponse(res, "Faculty profile created successfully", {
+			...createdFaculty,
+			...(loginAccount ? { loginAccount } : {}),
+		}, 201);
 	} catch (error) {
 		if (error.code === "23505") {
 			const field = String(error.constraint || "").includes("email") ? "email" : "id";
