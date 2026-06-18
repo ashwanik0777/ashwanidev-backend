@@ -6,6 +6,8 @@ const { authenticate, authorize } = require("../../middleware/auth");
 const { ensureAuthBootstrap } = require("../auth/auth.service");
 const { sendMail, isMailConfigured } = require("../../utils/mailer");
 const ROLES = require("../../constants/roles");
+const env = require("../../config/env");
+const { buildCredentialsEmail } = require("../../utils/mailTemplate");
 
 const router = express.Router();
 
@@ -155,6 +157,8 @@ const buildCredentialMailContent = ({ facultyName, username, password, linkedFac
 	const safePassword = String(password || "").trim();
 	const safeLinkedFacultyId = normalize(linkedFacultyId) || "N/A";
 
+	const loginUrl = `${env.appBaseUrl || "https://gbu.ac.in"}/login`;
+
 	const text = [
 		`Dear ${safeFacultyName},`,
 		"",
@@ -163,19 +167,12 @@ const buildCredentialMailContent = ({ facultyName, username, password, linkedFac
 		`Password: ${safePassword}`,
 		`Linked Faculty ID: ${safeLinkedFacultyId}`,
 		"",
+		`Login URL: ${loginUrl}`,
+		"",
 		"Please change your password after first login.",
 	].join("\n");
 
-	const html = `
-		<p>Dear ${safeFacultyName},</p>
-		<p>Your GBU Faculty Portal credentials are generated.</p>
-		<ul>
-			<li><strong>Username:</strong> ${safeUsername}</li>
-			<li><strong>Password:</strong> ${safePassword}</li>
-			<li><strong>Linked Faculty ID:</strong> ${safeLinkedFacultyId}</li>
-		</ul>
-		<p>Please change your password after first login.</p>
-	`;
+	const html = buildCredentialsEmail(safeFacultyName, safeUsername, safePassword, loginUrl, safeLinkedFacultyId);
 
 	return { text, html };
 };

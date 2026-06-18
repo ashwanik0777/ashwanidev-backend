@@ -5,6 +5,7 @@ const env = require("../../config/env");
 const ROLES = require("../../constants/roles");
 const { query, getDbPool } = require("../../config/db");
 const { sendMail } = require("../../utils/mailer");
+const { buildOtpEmail } = require("../../utils/mailTemplate");
 
 const portalRoleMap = {
   teacher: [ROLES.FACULTY],
@@ -303,12 +304,7 @@ const login = async (email, password, portalRole, requestMeta = {}) => {
   );
 
   const subject = "GBU Login Verification OTP";
-  const html = `
-    <p>Dear ${user.name},</p>
-    <p>Your OTP for login is:</p>
-    <h2 style="letter-spacing: 4px;">${otpCode}</h2>
-    <p>This OTP is valid for ${env.otpExpiresMinutes} minutes.</p>
-  `;
+  const html = buildOtpEmail(user.name, otpCode, env.otpExpiresMinutes, "logging into GBU Faculty Portal");
   await sendMail({ to: user.email, subject, text: `Your OTP is ${otpCode}`, html });
 
   return {
@@ -506,16 +502,8 @@ const requestPasswordResetOtp = async (email) => {
   );
 
   const subject = "GBU Password Reset OTP";
-  const text = `Your OTP for password reset is ${otpCode}. It is valid for ${env.otpExpiresMinutes} minutes.`;
-  const html = `
-    <p>Dear ${user.name},</p>
-    <p>Your OTP for password reset is:</p>
-    <h2 style="letter-spacing: 4px;">${otpCode}</h2>
-    <p>This OTP is valid for ${env.otpExpiresMinutes} minutes.</p>
-    <p>If you did not request this, please ignore this email.</p>
-  `;
-
-  await sendMail({ to: user.email, subject, text, html });
+  const html = buildOtpEmail(user.name, otpCode, env.otpExpiresMinutes, "resetting your password");
+  await sendMail({ to: user.email, subject, text: `Your OTP is ${otpCode}`, html });
 
   return { accepted: true };
 };

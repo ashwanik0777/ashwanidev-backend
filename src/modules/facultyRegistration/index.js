@@ -8,6 +8,7 @@ const { authenticate, authorize } = require("../../middleware/auth");
 const { ensureAuthBootstrap } = require("../auth/auth.service");
 const ROLES = require("../../constants/roles");
 const { sendMail } = require("../../utils/mailer");
+const { buildOtpEmail, buildCredentialsEmail, buildRejectionEmail } = require("../../utils/mailTemplate");
 const env = require("../../config/env");
 
 const router = express.Router();
@@ -119,13 +120,7 @@ router.post("/faculty-registration/send-otp", async (req, res) => {
 
 		// Send OTP via email
 		const subject = "GBU Faculty Registration - Email Verification OTP";
-		const html = `
-			<p>Dear Applicant,</p>
-			<p>Your OTP for email verification is:</p>
-			<h2 style="letter-spacing: 4px;">${otpCode}</h2>
-			<p>This OTP is valid for ${env.otpExpiresMinutes} minutes.</p>
-			<p>If you did not request this, please ignore this email.</p>
-		`;
+		const html = buildOtpEmail("Applicant", otpCode, env.otpExpiresMinutes, "verifying your email for registration");
 		await sendMail({ to: email, subject, text: `Your OTP is ${otpCode}`, html });
 
 		return successResponse(res, "OTP sent successfully. Please check your email.");
@@ -423,17 +418,8 @@ router.post("/admin/faculty-registration-requests/:id/approve", adminAuth, async
 		);
 
 		// Send credentials email
-		const loginUrl = env.appBaseUrl ? `${env.appBaseUrl}/login` : "https://gbu.ac.in/login";
-		const credentialHtml = `
-			<p>Dear ${regReq.name},</p>
-			<p>Your faculty registration request has been <strong>approved</strong>. Your login credentials are as follows:</p>
-			<table style="border-collapse: collapse; margin: 16px 0;">
-				<tr><td style="padding: 4px 12px; font-weight: bold;">Login ID:</td><td style="padding: 4px 12px;">${regReq.email}</td></tr>
-				<tr><td style="padding: 4px 12px; font-weight: bold;">Temporary Password:</td><td style="padding: 4px 12px;">${plainPassword}</td></tr>
-			</table>
-			<p>Please login at <a href="${loginUrl}">${loginUrl}</a> and change your password immediately.</p>
-			<p>Regards,<br/>GBU Faculty Portal</p>
-		`;
+		const loginUrl = `${env.appBaseUrl || "https://gbu.ac.in"}/login`;
+		const credentialHtml = buildCredentialsEmail(regReq.name, regReq.email, plainPassword, loginUrl, facultyId);
 		try {
 			await sendMail({
 				to: regReq.email,
@@ -503,13 +489,7 @@ router.post("/admin/faculty-registration-requests/:id/reject", adminAuth, async 
 
 		// Send rejection email
 		try {
-			const rejectionHtml = `
-				<p>Dear ${regReq.name},</p>
-				<p>We regret to inform you that your faculty registration request has been <strong>rejected</strong>.</p>
-				${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
-				<p>If you believe this is an error, please contact the administration.</p>
-				<p>Regards,<br/>GBU Faculty Portal</p>
-			`;
+			const rejectionHtml = buildRejectionEmail(regReq.name, reason);
 			await sendMail({
 				to: regReq.email,
 				subject: "GBU Faculty Portal - Registration Request Update",
