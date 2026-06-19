@@ -1,4 +1,6 @@
 const nodemailer = require("nodemailer");
+const fs = require("fs");
+const path = require("path");
 const env = require("../config/env");
 const { logInfo, logError } = require("../config/logger");
 
@@ -28,6 +30,18 @@ const getTransporter = () => {
   return transporter;
 };
 
+const getLogoPath = () => {
+  // Try dynamic relative path from mailer.js
+  const relPath = path.join(__dirname, "../../../gbu-website/public/assets/logo1.png");
+  if (fs.existsSync(relPath)) return relPath;
+
+  // Try user's exact absolute path
+  const absPath = "/Users/ashwanikushwaha/gbu-full-web/gbu-website/public/assets/logo1.png";
+  if (fs.existsSync(absPath)) return absPath;
+
+  return null;
+};
+
 const sendMail = async ({ to, subject, text, html }) => {
   const transport = getTransporter();
 
@@ -37,13 +51,28 @@ const sendMail = async ({ to, subject, text, html }) => {
   }
 
   try {
-    const result = await transport.sendMail({
+    const mailOptions = {
       from: env.smtpFrom,
       to,
       subject,
       text,
       html,
-    });
+    };
+
+    if (html && html.includes("cid:gbulogo")) {
+      const logoPath = getLogoPath();
+      if (logoPath) {
+        mailOptions.attachments = [
+          {
+            filename: 'logo1.png',
+            path: logoPath,
+            cid: 'gbulogo'
+          }
+        ];
+      }
+    }
+
+    const result = await transport.sendMail(mailOptions);
 
     return { queued: true, messageId: result.messageId };
   } catch (error) {

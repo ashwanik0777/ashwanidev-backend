@@ -1,14 +1,6 @@
 const normalize = (value) => String(value || "").trim();
 
-// SVG Icons mimicking Lucide React Icons (24x24)
-const ICONS = {
-  LOCK: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto;"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
-  KEY: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto;"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>`,
-  ALERT: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto;"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>`
-};
-
-const buildBaseTemplate = ({ title, iconSvg, contentHtml, portalName = "Faculty Portal" }) => {
-  const isDanger = iconSvg.includes('stroke="#dc2626"');
+const buildBaseTemplate = ({ title, contentHtml, portalName = "Faculty Portal", isDanger = false }) => {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -17,124 +9,138 @@ const buildBaseTemplate = ({ title, iconSvg, contentHtml, portalName = "Faculty 
   <title>${title}</title>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      background-color: #f8fafc;
-      color: #1e293b;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #fafaf9;
+      color: #44403c;
       margin: 0;
       padding: 0;
+      -webkit-font-smoothing: antialiased;
     }
     .wrapper {
-      padding: 30px 15px;
-      background-color: #f8fafc;
+      padding: 24px 10px;
+      background-color: #fafaf9;
       box-sizing: border-box;
     }
     .card {
-      max-width: 480px;
+      max-width: 420px;
       margin: 0 auto;
       background-color: #ffffff;
       border-radius: 12px;
-      border: 1px solid #e2e8f0;
-      padding: 32px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid #e7e5e4;
+      padding: 24px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
     }
     .header {
       text-align: center;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
+    }
+    .logo-img {
+      width: 52px;
+      height: 52px;
+      display: block;
+      margin: 0 auto 12px auto;
+      object-fit: contain;
     }
     .portal-tag {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 1.5px;
-      color: #2563eb;
+      letter-spacing: 1px;
+      color: #78716c;
+      background-color: #f5f5f4;
+      padding: 4px 10px;
+      border-radius: 16px;
+      display: inline-block;
     }
     .portal-tag.danger {
       color: #dc2626;
-    }
-    .icon-box {
-      margin: 16px auto 0 auto;
-      padding: 12px;
-      background-color: #eff6ff;
-      border-radius: 50%;
-      width: 24px;
-      height: 24px;
-      display: inline-block;
-    }
-    .icon-box.danger {
       background-color: #fef2f2;
     }
     .content {
-      font-size: 14px;
-      line-height: 1.6;
-      color: #334155;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #44403c;
     }
     .content p {
-      margin: 0 0 16px 0;
+      margin: 0 0 12px 0;
     }
     .otp-display {
       display: block;
-      margin: 20px auto;
-      padding: 12px;
-      background-color: #f1f5f9;
+      margin: 16px auto;
+      padding: 10px;
+      background-color: #f5f5f4;
       border-radius: 8px;
-      font-size: 26px;
+      font-size: 28px;
       font-weight: 700;
       letter-spacing: 4px;
       text-align: center;
-      color: #0f172a;
-      border: 1px solid #e2e8f0;
-      max-width: 200px;
+      color: #1c1917;
+      border: 1px dashed #d6d3d1;
+      max-width: 180px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
     .btn {
       display: inline-block;
-      padding: 10px 20px;
-      background-color: #2563eb;
+      padding: 10px 24px;
+      background-color: #1c1917;
       color: #ffffff !important;
       text-decoration: none;
       font-weight: 600;
       font-size: 13px;
-      border-radius: 8px;
+      border-radius: 6px;
       text-align: center;
-      margin: 8px 0;
-    }
-    .btn:hover {
-      background-color: #1d4ed8;
+      margin: 12px 0;
+      border: 1px solid #1c1917;
     }
     .table-details {
       width: 100%;
-      margin: 20px 0;
+      margin: 16px 0;
       border-collapse: collapse;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
+      border: 1px solid #e7e5e4;
+      border-radius: 8px;
       overflow: hidden;
+      background-color: #fafaf9;
     }
     .table-details td {
       padding: 10px 14px;
-      border-bottom: 1px solid #e2e8f0;
-      font-size: 13px;
-      color: #334155;
+      border-bottom: 1px solid #e7e5e4;
+      font-size: 12px;
+      color: #44403c;
     }
     .table-details tr:last-child td {
       border-bottom: none;
     }
     .lbl {
       font-weight: 600;
-      color: #64748b;
-      width: 40%;
+      color: #78716c;
+      width: 35%;
     }
     .val {
-      font-family: monospace;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-weight: 700;
-      color: #0f172a;
+      color: #1c1917;
+      word-break: break-all;
     }
     .footer {
       margin-top: 24px;
       text-align: center;
-      font-size: 11px;
-      color: #94a3b8;
+      font-size: 10px;
+      color: #78716c;
       line-height: 1.4;
-      border-top: 1px solid #f1f5f9;
+      border-top: 1px solid #e7e5e4;
       padding-top: 16px;
+    }
+    .footer-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #1c1917;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+    .footer-copy {
+      font-size: 9px;
+      color: #a8a29e;
+      margin-top: 6px;
     }
   </style>
 </head>
@@ -142,18 +148,16 @@ const buildBaseTemplate = ({ title, iconSvg, contentHtml, portalName = "Faculty 
   <div class="wrapper">
     <div class="card">
       <div class="header">
+        <img src="cid:gbulogo" alt="GBU Logo" class="logo-img" />
         <div class="portal-tag ${isDanger ? 'danger' : ''}">${portalName}</div>
-        <div class="icon-box ${isDanger ? 'danger' : ''}">
-          ${iconSvg}
-        </div>
       </div>
       <div class="content">
         ${contentHtml}
       </div>
       <div class="footer">
-        <strong>Gautam Buddha University</strong><br/>
-        Yamuna Expressway, Greater Noida, U.P. - 201312<br/>
-        &copy; ${new Date().getFullYear()} GBU
+        <div class="footer-title">GAUTAM BUDDHA UNIVERSITY</div>
+        <div>Yamuna Expressway, Greater Noida, U.P. - 201312</div>
+        <div class="footer-copy">&copy; ${new Date().getFullYear()} GBU. All rights reserved.</div>
       </div>
     </div>
   </div>
@@ -176,9 +180,9 @@ const buildOtpEmail = (recipientName, otpCode, expiresMinutes, purposeText, port
 
   return buildBaseTemplate({
     title,
-    iconSvg: ICONS.LOCK,
     contentHtml,
-    portalName
+    portalName,
+    isDanger: false
   });
 };
 
@@ -216,9 +220,9 @@ const buildCredentialsEmail = (recipientName, username, password, loginUrl, link
 
   return buildBaseTemplate({
     title,
-    iconSvg: ICONS.KEY,
     contentHtml,
-    portalName
+    portalName,
+    isDanger: false
   });
 };
 
@@ -230,17 +234,19 @@ const buildRejectionEmail = (recipientName, reason, portalName = "Faculty Portal
   const contentHtml = `
     <p>Dear ${safeName},</p>
     <p>We regret to inform you that your registration request has been <strong>rejected</strong> by the administration.</p>
-    ${reason ? `<div style="padding: 12px 14px; background-color: #fef2f2; border-left: 3px solid #dc2626; border-radius: 4px; margin-bottom: 16px; font-size: 13px; color: #991b1b;">
-      <strong>Reason:</strong> ${normalize(reason)}
+    ${reason ? `
+    <div style="padding: 12px; background-color: #fef2f2; border-left: 3px solid #dc2626; border-radius: 6px; margin: 16px 0; font-size: 12px; color: #991b1b; line-height: 1.4;">
+      <div style="font-weight: 700; margin-bottom: 2px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px;">Rejection Reason</div>
+      ${normalize(reason)}
     </div>` : ""}
     <p>Regards,<br/><strong>GBU Team</strong></p>
   `;
 
   return buildBaseTemplate({
     title,
-    iconSvg: ICONS.ALERT,
     contentHtml,
-    portalName
+    portalName,
+    isDanger: true
   });
 };
 
