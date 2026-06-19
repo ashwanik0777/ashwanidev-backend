@@ -303,8 +303,15 @@ const login = async (email, password, portalRole, requestMeta = {}) => {
     [user.id, hashOtp(otpCode), expiresAt],
   );
 
-  const subject = "GBU Login Verification OTP";
-  const html = buildOtpEmail(user.name, otpCode, env.otpExpiresMinutes, "logging into GBU Faculty Portal");
+  let portalName = "Faculty Portal";
+  if (user.role === ROLES.SUPER_ADMIN) {
+    portalName = "Admin Portal";
+  } else if (user.role === ROLES.SCHOOL) {
+    portalName = "School Portal";
+  }
+
+  const subject = `GBU ${portalName} - Verification OTP`;
+  const html = buildOtpEmail(user.name, otpCode, env.otpExpiresMinutes, "logging in", portalName);
   await sendMail({ to: user.email, subject, text: `Your OTP is ${otpCode}`, html });
 
   return {
@@ -501,8 +508,15 @@ const requestPasswordResetOtp = async (email) => {
     [user.id, hashOtp(otpCode), expiresAt],
   );
 
-  const subject = "GBU Password Reset OTP";
-  const html = buildOtpEmail(user.name, otpCode, env.otpExpiresMinutes, "resetting your password");
+  let portalName = "Faculty Portal";
+  if (user.role === ROLES.SUPER_ADMIN) {
+    portalName = "Admin Portal";
+  } else if (user.role === ROLES.SCHOOL) {
+    portalName = "School Portal";
+  }
+
+  const subject = `GBU ${portalName} - Password Reset OTP`;
+  const html = buildOtpEmail(user.name, otpCode, env.otpExpiresMinutes, "resetting password", portalName);
   await sendMail({ to: user.email, subject, text: `Your OTP is ${otpCode}`, html });
 
   return { accepted: true };

@@ -1,13 +1,13 @@
 const normalize = (value) => String(value || "").trim();
 
-// SVG Icons mimicking Lucide React Icons
+// SVG Icons mimicking Lucide React Icons (24x24)
 const ICONS = {
-  LOCK: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto;"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
-  KEY: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto;"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>`,
-  ALERT: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto;"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>`
+  LOCK: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto;"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+  KEY: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto;"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>`,
+  ALERT: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto;"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>`
 };
 
-const buildBaseTemplate = ({ title, iconSvg, contentHtml }) => {
+const buildBaseTemplate = ({ title, iconSvg, contentHtml, portalName = "Faculty Portal" }) => {
   const isDanger = iconSvg.includes('stroke="#dc2626"');
   return `<!DOCTYPE html>
 <html>
@@ -17,145 +17,133 @@ const buildBaseTemplate = ({ title, iconSvg, contentHtml }) => {
   <title>${title}</title>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
       background-color: #f8fafc;
       color: #1e293b;
       margin: 0;
       padding: 0;
-      -webkit-font-smoothing: antialiased;
     }
     .wrapper {
-      width: 100%;
+      padding: 30px 15px;
       background-color: #f8fafc;
-      padding: 40px 20px;
       box-sizing: border-box;
     }
-    .container {
-      max-width: 580px;
+    .card {
+      max-width: 480px;
       margin: 0 auto;
       background-color: #ffffff;
-      border-radius: 16px;
+      border-radius: 12px;
       border: 1px solid #e2e8f0;
-      overflow: hidden;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+      padding: 32px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     .header {
-      background-color: #ffffff;
-      padding: 32px 32px 20px 32px;
       text-align: center;
-      border-bottom: 1px solid #f1f5f9;
+      margin-bottom: 24px;
     }
-    .logo-text {
-      font-size: 20px;
-      font-weight: 700;
-      color: #0f172a;
-      letter-spacing: -0.5px;
-      margin-top: 8px;
-    }
-    .logo-sub {
+    .portal-tag {
       font-size: 11px;
-      color: #64748b;
+      font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 1.5px;
-      font-weight: 600;
+      color: #2563eb;
     }
-    .icon-container {
-      margin: 20px auto 0 auto;
-      display: inline-block;
-      padding: 16px;
+    .portal-tag.danger {
+      color: #dc2626;
+    }
+    .icon-box {
+      margin: 16px auto 0 auto;
+      padding: 12px;
       background-color: #eff6ff;
       border-radius: 50%;
-      width: 48px;
-      height: 48px;
+      width: 24px;
+      height: 24px;
+      display: inline-block;
     }
-    .icon-container.danger {
+    .icon-box.danger {
       background-color: #fef2f2;
     }
     .content {
-      padding: 32px;
+      font-size: 14px;
       line-height: 1.6;
-      font-size: 15px;
-    }
-    .content p {
-      margin-top: 0;
-      margin-bottom: 16px;
       color: #334155;
     }
-    .otp-code {
+    .content p {
+      margin: 0 0 16px 0;
+    }
+    .otp-display {
       display: block;
-      width: fit-content;
-      margin: 24px auto;
-      padding: 14px 28px;
+      margin: 20px auto;
+      padding: 12px;
       background-color: #f1f5f9;
-      border-radius: 12px;
-      font-size: 32px;
+      border-radius: 8px;
+      font-size: 26px;
       font-weight: 700;
-      color: #0f172a;
-      letter-spacing: 6px;
+      letter-spacing: 4px;
       text-align: center;
+      color: #0f172a;
       border: 1px solid #e2e8f0;
+      max-width: 200px;
     }
     .btn {
       display: inline-block;
-      padding: 12px 24px;
+      padding: 10px 20px;
       background-color: #2563eb;
       color: #ffffff !important;
       text-decoration: none;
       font-weight: 600;
-      font-size: 14px;
-      border-radius: 10px;
+      font-size: 13px;
+      border-radius: 8px;
       text-align: center;
-      margin: 16px 0;
+      margin: 8px 0;
     }
     .btn:hover {
       background-color: #1d4ed8;
     }
-    .credentials-table {
+    .table-details {
       width: 100%;
+      margin: 20px 0;
       border-collapse: collapse;
-      margin: 24px 0;
-      background-color: #f8fafc;
-      border-radius: 10px;
-      overflow: hidden;
       border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      overflow: hidden;
     }
-    .credentials-table td {
-      padding: 12px 16px;
+    .table-details td {
+      padding: 10px 14px;
       border-bottom: 1px solid #e2e8f0;
-      font-size: 14px;
+      font-size: 13px;
       color: #334155;
     }
-    .credentials-table tr:last-child td {
+    .table-details tr:last-child td {
       border-bottom: none;
     }
-    .credentials-label {
+    .lbl {
       font-weight: 600;
-      color: #475569;
+      color: #64748b;
       width: 40%;
     }
-    .credentials-value {
-      font-family: Courier, monospace;
+    .val {
+      font-family: monospace;
       font-weight: 700;
       color: #0f172a;
     }
     .footer {
-      padding: 24px 32px 40px 32px;
+      margin-top: 24px;
       text-align: center;
-      font-size: 12px;
-      color: #64748b;
-      line-height: 1.5;
+      font-size: 11px;
+      color: #94a3b8;
+      line-height: 1.4;
       border-top: 1px solid #f1f5f9;
-      background-color: #fafbfd;
+      padding-top: 16px;
     }
   </style>
 </head>
 <body>
   <div class="wrapper">
-    <div class="container">
+    <div class="card">
       <div class="header">
-        <div class="logo-sub">Gautam Buddha University</div>
-        <div class="logo-text">Faculty Portal</div>
-        <div class="icon-container ${isDanger ? 'danger' : ''}">
+        <div class="portal-tag ${isDanger ? 'danger' : ''}">${portalName}</div>
+        <div class="icon-box ${isDanger ? 'danger' : ''}">
           ${iconSvg}
         </div>
       </div>
@@ -163,9 +151,9 @@ const buildBaseTemplate = ({ title, iconSvg, contentHtml }) => {
         ${contentHtml}
       </div>
       <div class="footer">
-        <p>This is an automated message from Gautam Buddha University Faculty Portal.</p>
-        <p>Yamuna Expressway, Greater Noida, G.B. Nagar, U.P. - 201312</p>
-        <p>&copy; ${new Date().getFullYear()} GBU. All rights reserved.</p>
+        <strong>Gautam Buddha University</strong><br/>
+        Yamuna Expressway, Greater Noida, U.P. - 201312<br/>
+        &copy; ${new Date().getFullYear()} GBU
       </div>
     </div>
   </div>
@@ -174,88 +162,85 @@ const buildBaseTemplate = ({ title, iconSvg, contentHtml }) => {
 };
 
 // Template 1: OTP Email
-const buildOtpEmail = (recipientName, otpCode, expiresMinutes, purposeText) => {
+const buildOtpEmail = (recipientName, otpCode, expiresMinutes, purposeText, portalName = "Faculty Portal") => {
   const safeName = normalize(recipientName) || "User";
-  const title = `GBU Login Verification - OTP`;
+  const title = `${portalName} Verification OTP`;
   
   const contentHtml = `
     <p>Dear ${safeName},</p>
-    <p>We received a request for ${purposeText || "verifying your identity"}. Your One-Time Password (OTP) is:</p>
-    <div class="otp-code">${otpCode}</div>
-    <p>This OTP is confidential and valid for <strong>${expiresMinutes || 10} minutes</strong>. Please do not share this code with anyone.</p>
-    <p>If you did not request this OTP, please ignore this email or contact security support.</p>
-    <p>Regards,<br/><strong>GBU Faculty Portal Team</strong></p>
+    <p>Your verification OTP code is:</p>
+    <div class="otp-display">${otpCode}</div>
+    <p>This code is valid for <strong>${expiresMinutes || 10} minutes</strong>. Please do not share it with anyone.</p>
+    <p>Regards,<br/><strong>GBU Team</strong></p>
   `;
 
   return buildBaseTemplate({
     title,
     iconSvg: ICONS.LOCK,
-    contentHtml
+    contentHtml,
+    portalName
   });
 };
 
 // Template 2: Credentials Email
-const buildCredentialsEmail = (recipientName, username, password, loginUrl, linkedFacultyId) => {
-  const safeName = normalize(recipientName) || "Faculty Member";
+const buildCredentialsEmail = (recipientName, username, password, loginUrl, linkedFacultyId, portalName = "Faculty Portal") => {
+  const safeName = normalize(recipientName) || "Portal User";
   const safeUsername = normalize(username);
   const safePassword = normalize(password);
-  const title = `GBU Faculty Portal - Login Credentials`;
+  const title = `${portalName} Login Credentials`;
 
   const contentHtml = `
     <p>Dear ${safeName},</p>
-    <p>Welcome to the Gautam Buddha University Faculty Portal. Your registration has been approved, and your official portal login account is ready.</p>
-    <p>Your credentials are listed below:</p>
-    <table class="credentials-table">
+    <p>Your login credentials are ready:</p>
+    <table class="table-details">
       <tr>
-        <td class="credentials-label">Login ID / Email:</td>
-        <td class="credentials-value">${safeUsername}</td>
+        <td class="lbl">Login ID / Email:</td>
+        <td class="val">${safeUsername}</td>
       </tr>
       <tr>
-        <td class="credentials-label">Temporary Password:</td>
-        <td class="credentials-value">${safePassword}</td>
+        <td class="lbl">Temporary Password:</td>
+        <td class="val">${safePassword}</td>
       </tr>
       ${linkedFacultyId && linkedFacultyId !== "N/A" ? `
       <tr>
-        <td class="credentials-label">Linked Faculty ID:</td>
-        <td class="credentials-value">${normalize(linkedFacultyId)}</td>
+        <td class="lbl">Linked Faculty ID:</td>
+        <td class="val">${normalize(linkedFacultyId)}</td>
       </tr>` : ""}
     </table>
-    <p>Please click the button below to log in and change your password immediately on your first access.</p>
+    <p>Please change your password immediately on your first login.</p>
     <div style="text-align: center;">
-      <a href="${loginUrl}" class="btn" target="_blank">Access Faculty Portal</a>
+      <a href="${loginUrl}" class="btn" target="_blank">Access Portal</a>
     </div>
-    <p>If you have any difficulty logging in, please reach out to the administrator.</p>
-    <p>Regards,<br/><strong>GBU Faculty Portal Team</strong></p>
+    <p>Regards,<br/><strong>GBU Team</strong></p>
   `;
 
   return buildBaseTemplate({
     title,
     iconSvg: ICONS.KEY,
-    contentHtml
+    contentHtml,
+    portalName
   });
 };
 
 // Template 3: Rejection Email
-const buildRejectionEmail = (recipientName, reason) => {
+const buildRejectionEmail = (recipientName, reason, portalName = "Faculty Portal") => {
   const safeName = normalize(recipientName) || "Applicant";
-  const title = `GBU Faculty Portal - Registration Update`;
+  const title = `${portalName} Registration Update`;
 
   const contentHtml = `
     <p>Dear ${safeName},</p>
-    <p>Thank you for submitting your registration request to the Gautam Buddha University Faculty Portal.</p>
-    <p>After reviewing your request, we regret to inform you that it has been <strong>rejected</strong> by the administration.</p>
-    ${reason ? `<p><strong>Reason for rejection:</strong></p>
-    <div style="padding: 12px 16px; background-color: #fef2f2; border-left: 4px solid #dc2626; border-radius: 4px; margin-bottom: 20px; font-size: 14px; color: #991b1b;">
-      ${normalize(reason)}
+    <p>We regret to inform you that your registration request has been <strong>rejected</strong> by the administration.</p>
+    ${reason ? `<div style="padding: 12px 14px; background-color: #fef2f2; border-left: 3px solid #dc2626; border-radius: 4px; margin-bottom: 16px; font-size: 13px; color: #991b1b;">
+      <strong>Reason:</strong> ${normalize(reason)}
     </div>` : ""}
-    <p>If you believe this is an error or have additional questions, please feel free to submit a new request or reach out to the university administration department.</p>
-    <p>Regards,<br/><strong>GBU Faculty Portal Team</strong></p>
+    <p>Regards,<br/><strong>GBU Team</strong></p>
   `;
 
   return buildBaseTemplate({
     title,
     iconSvg: ICONS.ALERT,
-    contentHtml
+    contentHtml,
+    portalName
   });
 };
 

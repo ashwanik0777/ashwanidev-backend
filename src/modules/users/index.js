@@ -151,18 +151,27 @@ const buildFilters = ({ queryText, role, status }) => {
 	return { clauses, params };
 };
 
-const buildCredentialMailContent = ({ facultyName, username, password, linkedFacultyId }) => {
-	const safeFacultyName = normalize(facultyName) || "Faculty Member";
+const buildCredentialMailContent = ({ facultyName, username, password, linkedFacultyId, role, portalName }) => {
+	const safeFacultyName = normalize(facultyName) || "Portal User";
 	const safeUsername = normalize(username) || "";
 	const safePassword = String(password || "").trim();
 	const safeLinkedFacultyId = normalize(linkedFacultyId) || "N/A";
+
+	let finalPortalName = normalize(portalName) || "Faculty Portal";
+	if (!portalName) {
+		if (role === ROLES.SUPER_ADMIN || role === "super_admin" || role === "admin") {
+			finalPortalName = "Admin Portal";
+		} else if (role === ROLES.SCHOOL || role === "school") {
+			finalPortalName = "School Portal";
+		}
+	}
 
 	const loginUrl = `${env.appBaseUrl || "https://gbu.ac.in"}/login`;
 
 	const text = [
 		`Dear ${safeFacultyName},`,
 		"",
-		"Your GBU Faculty Portal credentials are generated.",
+		`Your GBU ${finalPortalName} credentials are generated.`,
 		`Username: ${safeUsername}`,
 		`Password: ${safePassword}`,
 		`Linked Faculty ID: ${safeLinkedFacultyId}`,
@@ -172,7 +181,7 @@ const buildCredentialMailContent = ({ facultyName, username, password, linkedFac
 		"Please change your password after first login.",
 	].join("\n");
 
-	const html = buildCredentialsEmail(safeFacultyName, safeUsername, safePassword, loginUrl, safeLinkedFacultyId);
+	const html = buildCredentialsEmail(safeFacultyName, safeUsername, safePassword, loginUrl, safeLinkedFacultyId, finalPortalName);
 
 	return { text, html };
 };
