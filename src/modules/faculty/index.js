@@ -595,4 +595,65 @@ router.post("/admin/faculty/:id/generate-password", authenticate, authorize(ROLE
 	}
 });
 
+// Admin: Migrate existing faculty IDs to new structured format (one-time use)
+router.post("/admin/faculty/migrate-ids", authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res) => {
+	try {
+		await ensureFacultyContext();
+
+		// Fetch all faculty ordered by school_code then created_at
+		const allFaculty = await query(
+			`SELECT id, school, school_code, created_at FROM faculty_profiles ORDER BY school_code ASC, created_at ASC`
+		);
+
+		if (!allFaculty.rows.length) {
+			return successResponse(res, "No faculty profiles to migrate", { migrated: 0 });
+		}
+
+		const counters = {}; // Track serial per school code
+		const updates = [];
+
+		for (const row of allFaculty.rows) {
+			const rawCode = String(row.school_code || row.school || "").trim();
+			const schoolCode = resolveSchoolCode(rawCode);
+
+			// Check if already in new format
+			if (/^[A-Z]+-F\d{4,}$/.test(row.id)) {
+				// Already migrated — still count it for serial tracking
+				const serial = parseInt(row.id.replace(/^[A-Z]+-F/, ""), 10);
+				counters[schoolCode] = Math.max(counters[schoolCode] || 0, serial);
+				continue;
+			}
+
+			// Increment counter for this school
+			counters[schoolCode] = (counters[schoolCode] || 0) + 1;
+			const newId = `${schoolCode}-F${String(counters[schoolCode]).padStart(4, "0")}`;
+
+			updates.push({ oldId: row.id, newId });
+		}
+
+		// Apply updates in a transaction
+		await query("BEGIN");
+		try {
+			for (const { oldId, newId } of updates) {
+				// Update faculty_profiles
+				await query(`UPDATE faculty_profiles SET id = $1 WHERE id = $2`, [newId, oldId]);
+				// Update linked user accounts
+				await query(`UPDATE users SET linked_faculty_id = $1 WHERE linked_faculty_id = $2`, [newId, oldId]);
+			}
+			await query("COMMIT");
+		} catch (txErr) {
+			await query("ROLLBACK");
+			throw txErr;
+		}
+
+		return successResponse(res, `Migration complete. ${updates.length} faculty IDs updated.`, {
+			migrated: updates.length,
+			details: updates,
+		});
+	} catch (error) {
+		return errorResponse(res, "Migration failed", [{ field: "migration", message: error.message }], 500);
+	}
+});
+
 module.exports = router;
+
