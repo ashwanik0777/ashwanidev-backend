@@ -5,6 +5,7 @@ const { successResponse, errorResponse } = require("../../utils/response");
 const { authenticate, authorize } = require("../../middleware/auth");
 const { ensureAuthBootstrap } = require("../auth/auth.service");
 const ROLES = require("../../constants/roles");
+const { generateFacultyId, resolveSchoolCode } = require("../../utils/facultyIdGenerator");
 
 const router = express.Router();
 
@@ -360,7 +361,6 @@ router.post("/admin/faculty", adminAuth, async (req, res) => {
 	try {
 		await ensureFacultyContext();
 
-		const id = normalize(req.body?.id) || `faculty-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 		const name = normalize(req.body?.name);
 		if (!name) return errorResponse(res, "Validation failed", [{ field: "name", message: "Faculty name is required" }], 400);
 
@@ -370,8 +370,11 @@ router.post("/admin/faculty", adminAuth, async (req, res) => {
 		}
 		
 		const targetSchool = normalize(b.school);
-		const targetSchoolCode = normalize(b.school_code) || targetSchool.toUpperCase();
+		const targetSchoolCode = normalize(b.school_code) || resolveSchoolCode(targetSchool);
 		const facultyEmail = normalize(b.email).toLowerCase();
+
+		// Generate structured faculty ID: SCHOOLCODE-F0001
+		const id = normalize(req.body?.id) || await generateFacultyId(targetSchoolCode);
 
 		const result = await query(
 			`INSERT INTO faculty_profiles (
