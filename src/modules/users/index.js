@@ -528,7 +528,7 @@ router.put("/admin/accounts/:id", adminAuth, async (req, res) => {
 
 		const existingResult = await query(
 			`
-			SELECT id, username, role
+			SELECT id, username, role, name, email, linked_faculty_id, linked_school, linked_department, password_hash
 			FROM users
 			WHERE id = $1
 			LIMIT 1
@@ -580,6 +580,44 @@ router.put("/admin/accounts/:id", adminAuth, async (req, res) => {
 			return errorResponse(res, "Validation failed", roleValidation.errors, 400);
 		}
 
+		const oldRole = existing.role;
+		const newRole = UI_TO_DB_ROLE[role] || existing.role;
+		const becomingTeacher = newRole === ROLES.FACULTY && oldRole !== ROLES.FACULTY;
+
+		// If role is updated to teacher, lookup their real email from faculty_profiles
+		let userEmail = makeSyntheticEmail(username);
+		let targetEmail = existing.email;
+		if (newRole === ROLES.FACULTY) {
+			if (linkedFacultyId) {
+				const facultyResult = await query(
+					`SELECT email FROM faculty_profiles WHERE id = $1 LIMIT 1`,
+					[linkedFacultyId]
+				);
+				if (facultyResult.rows.length && facultyResult.rows[0].email) {
+					userEmail = facultyResult.rows[0].email.toLowerCase();
+					targetEmail = userEmail;
+				}
+			}
+		}
+
+		// Handle email credentials trigger
+		let plainPassword = password;
+		let shouldSendEmail = false;
+
+		if (becomingTeacher || (newRole === ROLES.FACULTY && password)) {
+			shouldSendEmail = true;
+			if (!plainPassword) {
+				const firstName = (name || existing.name || username || existing.username).split(" ")[0];
+				const currentYear = new Date().getFullYear();
+				plainPassword = `${firstName}${currentYear}`;
+			}
+		}
+
+		let finalPasswordHash = null;
+		if (plainPassword) {
+			finalPasswordHash = await bcrypt.hash(plainPassword, 12);
+		}
+
 		let sql = `
 			UPDATE users
 			SET name = $1,
@@ -590,23 +628,24 @@ router.put("/admin/accounts/:id", adminAuth, async (req, res) => {
 					linked_faculty_id = $6,
 					linked_school = $7,
 					linked_department = $8,
+					linked_school_code = $9,
 					updated_at = NOW()`;
 
 		const params = [
 			name || username,
 			username,
-			makeSyntheticEmail(username),
-			UI_TO_DB_ROLE[role] || existing.role,
+			userEmail,
+			newRole,
 			status === "inactive" ? false : true,
 			linkedFacultyId,
 			linkedSchool,
 			linkedDepartment,
+			linkedSchool, // linked_school_code is $9
 		];
 
-		if (password) {
-			const passwordHash = await bcrypt.hash(password, 12);
-			sql += `, password_hash = $9, password_updated_at = NOW()`;
-			params.push(passwordHash);
+		if (finalPasswordHash) {
+			sql += `, password_hash = $10, password_updated_at = NOW()`;
+			params.push(finalPasswordHash);
 		}
 
 		params.push(accountId);
@@ -625,12 +664,29 @@ router.put("/admin/accounts/:id", adminAuth, async (req, res) => {
 				username: updated.username,
 				role: DB_TO_UI_ROLE[updated.role] || updated.role,
 				status: updated.is_active ? "active" : "inactive",
-				passwordReset: Boolean(password),
+				passwordReset: Boolean(plainPassword),
 				linkedFacultyId: updated.linked_faculty_id || "",
 				linkedSchool: updated.linked_school || "",
 				linkedDepartment: updated.linked_department || "",
 			},
 		});
+
+		// Send credentials email
+		if (shouldSendEmail && targetEmail && !targetEmail.endsWith("@portal.gbu.local")) {
+			const loginUrl = `${env.appBaseUrl || "https://gbu.ac.in"}/login`;
+			const credentialHtml = buildCredentialsEmail(name || existing.name || username || existing.username, username, plainPassword, loginUrl, linkedFacultyId);
+			try {
+				await sendMail({
+					to: targetEmail,
+					subject: "GBU Faculty Portal - Your Login Credentials",
+					text: `Dear ${name || existing.name || username || existing.username}, Your faculty account role has been updated. Login ID: ${username}, Temporary Password: ${plainPassword}. Please login at ${loginUrl} and change your password.`,
+					html: credentialHtml,
+				});
+				console.log(`Credentials email sent successfully to ${targetEmail}`);
+			} catch (mailErr) {
+				console.error("[AccountUpdate] Failed to send credentials email:", mailErr.message);
+			}
+		}
 
 		return successResponse(res, "Account updated successfully", mapAccount(updated));
 	} catch (error) {
