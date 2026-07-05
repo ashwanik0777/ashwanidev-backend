@@ -250,8 +250,95 @@ const buildRejectionEmail = (recipientName, reason, portalName = "Faculty Portal
   });
 };
 
+const buildBookingNotificationEmail = (inChargeName, booking) => {
+  const safeName = normalize(inChargeName) || "In-Charge";
+  const title = `New Facility Booking Request - ${booking.token}`;
+  
+  const contentHtml = `
+    <p>Dear ${safeName},</p>
+    <p>A new booking request has been submitted for the facility: <strong>${normalize(booking.facilityName)}</strong>.</p>
+    <p>Please review the details below:</p>
+    <table class="table-details">
+      <tr>
+        <td class="lbl">Booking Token:</td>
+        <td class="val">${normalize(booking.token)}</td>
+      </tr>
+      <tr>
+        <td class="lbl">Applicant Name:</td>
+        <td class="val">${normalize(booking.userName)}</td>
+      </tr>
+      <tr>
+        <td class="lbl">Organization:</td>
+        <td class="val">${normalize(booking.organization || "N/A")}</td>
+      </tr>
+      <tr>
+        <td class="lbl">Schedule:</td>
+        <td class="val">${normalize(booking.startTime)} to ${normalize(booking.endTime)}</td>
+      </tr>
+      <tr>
+        <td class="lbl">Purpose:</td>
+        <td class="val">${normalize(booking.purpose)}</td>
+      </tr>
+      <tr>
+        <td class="lbl">Contact:</td>
+        <td class="val">${normalize(booking.userEmail)}<br/>${normalize(booking.userPhonePrimary)} / ${normalize(booking.userPhoneSecondary)}</td>
+      </tr>
+    </table>
+    <p>Please log in to the GBU Admin Portal to approve or reject this booking request.</p>
+    <p>Regards,<br/><strong>GBU Facilities Team</strong></p>
+  `;
+
+  return buildBaseTemplate({
+    title,
+    contentHtml,
+    portalName: "Admin Portal",
+    isDanger: false
+  });
+};
+
+const buildBookingStatusEmail = (userName, booking, status, remarks) => {
+  const safeName = normalize(userName) || "Applicant";
+  const title = `Facility Booking Update - ${booking.token}`;
+  const isRejected = String(status).toLowerCase() === "rejected";
+
+  const contentHtml = `
+    <p>Dear ${safeName},</p>
+    <p>The status of your booking request for <strong>${normalize(booking.facilityName)}</strong> has been updated.</p>
+    <p><strong>Current Status: <span style="color: ${isRejected ? '#dc2626' : '#16a34a'}; text-transform: uppercase;">${normalize(status)}</span></strong></p>
+    <table class="table-details">
+      <tr>
+        <td class="lbl">Booking Token:</td>
+        <td class="val">${normalize(booking.token)}</td>
+      </tr>
+      <tr>
+        <td class="lbl">Schedule:</td>
+        <td class="val">${normalize(booking.startTime)} to ${normalize(booking.endTime)}</td>
+      </tr>
+    </table>
+    ${isRejected && remarks ? `
+    <div style="padding: 12px; background-color: #fef2f2; border-left: 3px solid #dc2626; border-radius: 6px; margin: 16px 0; font-size: 12px; color: #991b1b; line-height: 1.4;">
+      <div style="font-weight: 700; margin-bottom: 2px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px;">Rejection Remarks</div>
+      ${normalize(remarks)}
+    </div>` : ""}
+    ${!isRejected ? `
+    <p>Please coordinate with the facility in-charge for access and other arrangements.</p>
+    ` : ""}
+    <p>Regards,<br/><strong>GBU Facilities Team</strong></p>
+  `;
+
+  return buildBaseTemplate({
+    title,
+    contentHtml,
+    portalName: "School Portal",
+    isDanger: isRejected
+  });
+};
+
 module.exports = {
   buildOtpEmail,
   buildCredentialsEmail,
-  buildRejectionEmail
+  buildRejectionEmail,
+  buildBookingNotificationEmail,
+  buildBookingStatusEmail
 };
+

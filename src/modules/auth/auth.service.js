@@ -15,7 +15,7 @@ const portalRoleMap = {
   super_admin: [ROLES.SUPER_ADMIN],
 };
 
-/* ─── All 8 GBU Schools ─── */
+/* ─── All GBU Schools & Orgs ─── */
 const SCHOOL_SEEDS = [
   { code: "SOICT", name: "School of Information & Communication Technology", slug: "soict" },
   { code: "SOBT",  name: "School of Biotechnology",                          slug: "sobt"  },
@@ -25,6 +25,8 @@ const SCHOOL_SEEDS = [
   { code: "SOM",   name: "School of Management",                             slug: "som"   },
   { code: "SOHSS", name: "School of Humanities & Social Sciences",           slug: "sohss" },
   { code: "SOVS",  name: "School of Vocational Studies & Applied Sciences",  slug: "sovs"  },
+  { code: "NSS",   name: "National Service Scheme (NSS)",                    slug: "nss"   },
+  { code: "NCC",   name: "National Cadet Corps (NCC)",                       slug: "ncc"   },
 ];
 
 const demoUsers = [

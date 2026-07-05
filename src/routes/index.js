@@ -11,6 +11,7 @@ const tendersRoutes = require("../modules/tenders");
 const usersRoutes = require("../modules/users");
 const facultyRoutes = require("../modules/faculty");
 const facultyRegistrationRoutes = require("../modules/facultyRegistration");
+const dacRoutes = require("../modules/dac");
 const router = express.Router();
 const v1Router = express.Router();
 
@@ -36,5 +37,6 @@ v1Router.use("/", tendersRoutes);
 v1Router.use("/", facultyRoutes);
 v1Router.use("/", usersRoutes);
 v1Router.use("/", facultyRegistrationRoutes);
+v1Router.use("/", dacRoutes);
 router.use("/v1", v1Router);
 module.exports = router;
