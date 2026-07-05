@@ -10,6 +10,7 @@ const ROLES = require("../../constants/roles");
 const { sendMail } = require("../../utils/mailer");
 const { buildOtpEmail, buildCredentialsEmail, buildRejectionEmail } = require("../../utils/mailTemplate");
 const env = require("../../config/env");
+const { generateFacultyId } = require("../../utils/facultyIdGenerator");
 
 const router = express.Router();
 
@@ -377,8 +378,8 @@ router.post("/admin/faculty-registration-requests/:id/approve", adminAuth, async
 			[id, Number(req.user?.sub) || null]
 		);
 
-		// Create faculty profile
-		const facultyId = `faculty-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+		// Create faculty profile with structured ID
+		const facultyId = await generateFacultyId(regReq.school_code);
 		await query(
 			`INSERT INTO faculty_profiles (id, name, designation, department, school, school_code, email, phone, is_active, created_by, updated_by)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $9)`,
