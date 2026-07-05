@@ -42,4 +42,39 @@ const resolveSchoolCode = (rawSchool) => {
 	return SCHOOL_CODE_MAP[key] || key.toUpperCase() || "GBU";
 };
 
-module.exports = { resolveSchoolCode, SCHOOL_CODE_MAP };
+/**
+ * Generate the next sequential faculty ID for a given school code.
+ * Format: {SCHOOLCODE}-F{SERIAL_PADDED} e.g. SOICT-F0001, SOE-F0012
+ *
+ * The function queries the DB for the highest existing serial number
+ * for the given school code and increments it.
+ */
+const generateFacultyId = async (schoolCodeRaw) => {
+	const schoolCode = resolveSchoolCode(schoolCodeRaw);
+	const prefix = `${schoolCode}-F`;
+
+	// Find the highest existing serial for this school
+	const result = await query(
+		`SELECT id FROM faculty_profiles
+		 WHERE id LIKE $1
+		 ORDER BY id DESC
+		 LIMIT 1`,
+		[`${prefix}%`]
+	);
+
+	let nextSerial = 1;
+	if (result.rows.length > 0) {
+		const lastId = result.rows[0].id; // e.g. "SOICT-F0003"
+		const serialStr = lastId.replace(prefix, ""); // "0003"
+		const lastSerial = parseInt(serialStr, 10);
+		if (Number.isFinite(lastSerial) && lastSerial > 0) {
+			nextSerial = lastSerial + 1;
+		}
+	}
+
+	// Pad to at least 4 digits
+	const serialPadded = String(nextSerial).padStart(4, "0");
+	return `${prefix}${serialPadded}`;
+};
+
+module.exports = { generateFacultyId, resolveSchoolCode, SCHOOL_CODE_MAP };
