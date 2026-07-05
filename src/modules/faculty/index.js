@@ -536,11 +536,11 @@ router.delete("/admin/faculty/:id", adminAuth, async (req, res) => {
 			}
 		}
 
-		const linkedResult = await query(
-			`SELECT id FROM users WHERE role = $1 AND LOWER(COALESCE(linked_faculty_id,'')) = LOWER($2) LIMIT 1`,
-			[ROLES.FACULTY, id]
+		// Automatically delete linked user login account first
+		await query(
+			`DELETE FROM users WHERE LOWER(COALESCE(linked_faculty_id,'')) = LOWER($1)`,
+			[id]
 		);
-		if (linkedResult.rows.length) return errorResponse(res, "Cannot delete faculty profile", [{ field: "linkedFacultyId", message: "Delete linked faculty login account first" }], 409);
 
 		const result = await query(`DELETE FROM faculty_profiles WHERE id = $1 RETURNING id`, [id]);
 		if (!result.rows.length) return errorResponse(res, "Faculty not found", [{ field: "id", message: "Faculty profile does not exist" }], 404);
