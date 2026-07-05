@@ -321,6 +321,7 @@ const validateRoleLinks = async ({
 				AND (
 					LOWER(COALESCE(code, '')) = LOWER($2)
 					OR LOWER(COALESCE(name, '')) = LOWER($2)
+					OR REPLACE(LOWER(COALESCE(name, '')), 'department of ', '') = REPLACE(LOWER($2), 'department of ', '')
 					OR LOWER(COALESCE(slug, '')) = LOWER($2)
 					OR CAST(id AS TEXT) = $2
 				)
