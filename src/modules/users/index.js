@@ -546,6 +546,16 @@ router.put("/admin/accounts/:id", adminAuth, async (req, res) => {
 			);
 		}
 
+		// Prevent non-primary admins from modifying the primary Super Admin account
+		if ((existing.id === 1 || existing.username === "admin") && Number(req.user?.sub) !== 1) {
+			return errorResponse(
+				res,
+				"Forbidden",
+				[{ field: "role", message: "You do not have permission to modify the primary Super Admin account" }],
+				403,
+			);
+		}
+
 		const name = normalize(req.body?.name);
 		const username = normalize(req.body?.username).toLowerCase() || existing.username;
 		const password = String(req.body?.password || "");
@@ -749,6 +759,16 @@ router.delete("/admin/accounts/:id", adminAuth, async (req, res) => {
 				"Account not found",
 				[{ field: "id", message: "Account does not exist" }],
 				404,
+			);
+		}
+
+		// Prevent non-primary admins from deleting the primary Super Admin account
+		if ((existing.id === 1 || existing.username === "admin") && Number(req.user?.sub) !== 1) {
+			return errorResponse(
+				res,
+				"Forbidden",
+				[{ field: "role", message: "You do not have permission to delete the primary Super Admin account" }],
+				403,
 			);
 		}
 
