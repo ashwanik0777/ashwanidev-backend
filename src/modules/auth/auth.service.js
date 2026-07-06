@@ -38,14 +38,6 @@ const demoUsers = [
     password: "Admin@123",
     forceReset: false,
   },
-  {
-    name: "Gaurav Kumar",
-    email: "gaurav.kumar@gbu.ac.in",
-    username: "gaurav.kumar",
-    role: ROLES.SUPER_ADMIN,
-    password: "@admin@2k26@",
-    forceReset: false,
-  },
   // School accounts for each school
   { name: "SOICT Admin",  email: "soict@gbu.ac.in",  username: "soict",  role: ROLES.SCHOOL, password: "Soict@123",  linkedSchoolCode: "SOICT", forceReset: true },
   { name: "SOBT Admin",   email: "sobt@gbu.ac.in",   username: "sobt",   role: ROLES.SCHOOL, password: "Sobt@123",   linkedSchoolCode: "SOBT",  forceReset: true },
