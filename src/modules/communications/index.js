@@ -71,6 +71,46 @@ const buildSortClause = ({ sortBy, order, sortFields, fallbackSortBy }) => {
   return `${selectedColumn} ${selectedOrder}, id DESC`;
 };
 
+const fetchSchoolAnnouncements = async (category) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS schools (
+        id SERIAL PRIMARY KEY,
+        code VARCHAR(50) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) UNIQUE NOT NULL,
+        overview TEXT,
+        is_active BOOLEAN DEFAULT true,
+        content JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    const schoolsResult = await query(
+      "SELECT id, code, name, content FROM schools WHERE is_active = true"
+    );
+    const items = [];
+    for (const school of schoolsResult.rows) {
+      const content = school.content || {};
+      const schoolItems = content[category] || [];
+      if (Array.isArray(schoolItems)) {
+        for (const item of schoolItems) {
+          items.push({
+            ...item,
+            schoolCode: school.code,
+            schoolName: school.name,
+            id: item.id || `${category}-${school.code}-${Date.now()}-${Math.random()}`,
+          });
+        }
+      }
+    }
+    return items;
+  } catch (error) {
+    console.error(`Failed to fetch school announcements for ${category}:`, error);
+    return [];
+  }
+};
+
 const toDateOnlyString = (value) => {
   if (!value) {
     return null;
@@ -323,27 +363,41 @@ const appendCommonClauses = ({
     whereClauses.push(tagsFilter(placeholder));
   }
 };
+const isNoticeNew = (publishedDate) => {
+  if (!publishedDate) return false;
+  const pubDate = new Date(publishedDate);
+  const diffTime = Math.abs(new Date() - pubDate);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays <= 7;
+};
 
-const mapAnnouncement = (row) => ({
-  id: row.id,
-  title: row.title,
-  slug: `notice-${row.id}`,
-  summary: row.content,
-  content: row.content,
-  category: row.type,
-  tags: [
-    String(row.type || "").toLowerCase(),
-    String(row.priority || "").toLowerCase(),
-  ].filter(Boolean),
-  coverImageUrl: row.pdf_url,
-  publishedAt: row.published_date,
-  createdAt: null,
-  updatedAt: null,
-  priority: row.priority,
-  views: row.views,
-  isNew: row.is_new,
-  pdfUrl: row.pdf_url,
-});
+const mapAnnouncement = (row) => {
+  const pubDate = row.published_date;
+  const isNew = row.is_new !== undefined && row.is_new !== null ? row.is_new : isNoticeNew(pubDate);
+  return {
+    id: row.id,
+    title: row.title,
+    slug: `notice-${row.id}`,
+    summary: row.content,
+    content: row.content,
+    category: row.type,
+    tags: [
+      String(row.type || "").toLowerCase(),
+      String(row.priority || "").toLowerCase(),
+    ].filter(Boolean),
+    coverImageUrl: row.pdf_url,
+    publishedAt: pubDate,
+    createdAt: null,
+    updatedAt: null,
+    priority: row.priority,
+    views: row.views,
+    isNew: isNew,
+    pdfUrl: row.pdf_url,
+    schoolCode: row.schoolCode || null,
+    schoolName: row.schoolName || "GBU",
+    level: row.level || "college",
+  };
+};
 
 const mapNewsItem = (row) => ({
   id: row.id,
@@ -365,6 +419,9 @@ const mapNewsItem = (row) => ({
   likes: row.likes,
   featured: row.is_featured,
   status: row.status,
+  schoolCode: row.schoolCode || null,
+  schoolName: row.schoolName || "GBU",
+  level: row.level || "college",
 });
 
 const mapEvent = (row) => {
@@ -495,6 +552,8 @@ const handleNoticesList = async (req, res) => {
     ? "Failed to fetch notices"
     : "Failed to fetch announcements";
 
+  const { schoolCode } = req.query;
+
   try {
     const listResult = await query(
       `
@@ -504,11 +563,59 @@ const handleNoticesList = async (req, res) => {
       `,
     );
 
-    return successResponse(
-      res,
-      successMessage,
-      listResult.rows.map(mapAnnouncement),
-    );
+    const globalNotices = listResult.rows.map((row) => ({
+      ...mapAnnouncement(row),
+      schoolCode: null,
+      schoolName: "GBU",
+      level: "college",
+    }));
+
+    const schoolNotices = await fetchSchoolAnnouncements("notices");
+    const normalizedSchoolNotices = schoolNotices.map((item) => {
+      const pubDate = item.date || item.published_date || item.publishedDate || null;
+      const isNew = item.isNew !== undefined ? item.isNew : isNoticeNew(pubDate);
+      return {
+        id: item.id,
+        title: item.title || "",
+        content: item.content || "",
+        published_date: pubDate,
+        type: item.type || "General",
+        priority: item.priority || "medium",
+        views: Number(item.views || 0),
+        is_new: isNew,
+        pdf_url: item.pdfUrl || "",
+        schoolCode: item.schoolCode,
+        schoolName: item.schoolName,
+        level: item.level || "college",
+      };
+    });
+
+    const mappedSchoolNotices = normalizedSchoolNotices.map(row => ({
+      ...mapAnnouncement(row),
+      schoolCode: row.schoolCode,
+      schoolName: row.schoolName,
+      level: row.level,
+    }));
+
+    let allNotices = [...globalNotices, ...mappedSchoolNotices];
+
+    if (schoolCode) {
+      allNotices = allNotices.filter((item) => {
+        const itemSchoolCode = String(item.schoolCode || "").toLowerCase();
+        const targetSchoolCode = String(schoolCode).toLowerCase();
+        return (itemSchoolCode === targetSchoolCode) || (!item.schoolCode && item.level === "college");
+      });
+    } else {
+      allNotices = allNotices.filter((item) => item.level === "college");
+    }
+
+    allNotices.sort((a, b) => {
+      const dateA = new Date(a.publishedAt || 0);
+      const dateB = new Date(b.publishedAt || 0);
+      return dateB - dateA;
+    });
+
+    return successResponse(res, successMessage, allNotices);
   } catch (error) {
     return errorResponse(
       res,
@@ -570,6 +677,7 @@ router.get("/notices/:id", async (req, res) => {
 });
 
 router.get("/news", async (req, res) => {
+  const { schoolCode } = req.query;
   try {
     const listResult = await query(
       `
@@ -581,11 +689,61 @@ router.get("/news", async (req, res) => {
       `,
     );
 
-    return successResponse(
-      res,
-      "News fetched successfully",
-      listResult.rows.map(mapNewsItem),
-    );
+    const globalNews = listResult.rows.map((row) => ({
+      ...mapNewsItem(row),
+      schoolCode: null,
+      schoolName: "GBU",
+      level: "college",
+    }));
+
+    const schoolNews = await fetchSchoolAnnouncements("news");
+    const normalizedSchoolNews = schoolNews.map((item) => ({
+      id: item.id,
+      title: item.title || "",
+      excerpt: item.excerpt || "",
+      content: item.content || "",
+      published_date: item.date || item.published_date || item.publishedDate || null,
+      author: item.author || "School Office",
+      department: item.department || item.schoolCode || "",
+      tags: item.tags || [],
+      category: item.category || "General",
+      priority: item.priority || "medium",
+      views: Number(item.views || 0),
+      likes: Number(item.likes || 0),
+      image_url: item.image || item.imageUrl || item.coverImageUrl || "",
+      is_featured: item.featured ?? false,
+      status: item.status || "published",
+      schoolCode: item.schoolCode,
+      schoolName: item.schoolName,
+      level: item.level || "college",
+    }));
+
+    const mappedSchoolNews = normalizedSchoolNews.map(row => ({
+      ...mapNewsItem(row),
+      schoolCode: row.schoolCode,
+      schoolName: row.schoolName,
+      level: row.level,
+    }));
+
+    let allNews = [...globalNews, ...mappedSchoolNews];
+
+    if (schoolCode) {
+      allNews = allNews.filter((item) => {
+        const itemSchoolCode = String(item.schoolCode || "").toLowerCase();
+        const targetSchoolCode = String(schoolCode).toLowerCase();
+        return (itemSchoolCode === targetSchoolCode) || (!item.schoolCode && item.level === "college");
+      });
+    } else {
+      allNews = allNews.filter((item) => item.level === "college");
+    }
+
+    allNews.sort((a, b) => {
+      const dateA = new Date(a.publishedAt || 0);
+      const dateB = new Date(b.publishedAt || 0);
+      return dateB - dateA;
+    });
+
+    return successResponse(res, "News fetched successfully", allNews);
   } catch (error) {
     return errorResponse(
       res,
@@ -671,6 +829,7 @@ router.get("/media-gallery", async (req, res) => {
 });
 
 router.get("/events", async (req, res) => {
+  const { schoolCode } = req.query;
   try {
     const listResult = await query(
       `
@@ -695,10 +854,57 @@ router.get("/events", async (req, res) => {
       `,
     );
 
+    const globalEvents = listResult.rows.map((row) => ({
+      ...row,
+      schoolCode: null,
+      schoolName: "GBU",
+      level: "college",
+    }));
+
+    const schoolEvents = await fetchSchoolAnnouncements("events");
+    const normalizedSchoolEvents = schoolEvents.map((item) => ({
+      id: item.id,
+      title: item.title || "",
+      description: item.description || "",
+      starts_at: item.starts_at || item.startsAt || item.date || null,
+      time_string: item.time_string || item.time || "",
+      venue: item.venue || item.location || "",
+      organizer: item.organizer || item.schoolCode || "GBU",
+      type: item.type || "General",
+      mode: item.mode || "Offline",
+      status: item.status || "published",
+      price: item.price || "Free",
+      attendees: Number(item.attendees || 0),
+      cover_image: item.cover_image || item.image || item.coverImageUrl || "",
+      tags: item.tags || [],
+      year: item.year || "",
+      schoolCode: item.schoolCode,
+      schoolName: item.schoolName,
+      level: item.level || "college",
+    }));
+
+    let allEvents = [...globalEvents, ...normalizedSchoolEvents];
+
+    if (schoolCode) {
+      allEvents = allEvents.filter((item) => {
+        const itemSchoolCode = String(item.schoolCode || "").toLowerCase();
+        const targetSchoolCode = String(schoolCode).toLowerCase();
+        return (itemSchoolCode === targetSchoolCode) || (!item.schoolCode && item.level === "college");
+      });
+    } else {
+      allEvents = allEvents.filter((item) => item.level === "college");
+    }
+
+    allEvents.sort((a, b) => {
+      const dateA = new Date(a.starts_at || 0);
+      const dateB = new Date(b.starts_at || 0);
+      return dateB - dateA;
+    });
+
     return res.status(200).json({
       success: true,
-      count: listResult.rowCount,
-      data: listResult.rows,
+      count: allEvents.length,
+      data: allEvents,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Server Error" });

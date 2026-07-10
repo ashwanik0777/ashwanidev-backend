@@ -222,11 +222,21 @@ router.get("/schools/code/:code", async (req, res) => {
    ADMIN ENDPOINTS — Schools are pre-seeded; admin can only UPDATE
    ═══════════════════════════════════════════════════════════════ */
 
-router.put("/admin/schools/:id", authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res) => {
+router.put("/admin/schools/:id", authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.SCHOOL), async (req, res) => {
 	try {
 		await ensureAcademicsInfrastructure();
 		const schoolId = Number(req.params.id);
 		const { name, overview, content, is_active } = req.body;
+
+		if (req.user.role === ROLES.SCHOOL) {
+			const schoolCheck = await query(`SELECT code FROM schools WHERE id = $1`, [schoolId]);
+			if (!schoolCheck.rows.length) {
+				return errorResponse(res, "School not found", [], 404);
+			}
+			if (schoolCheck.rows[0].code !== req.user.linkedSchoolCode) {
+				return errorResponse(res, "Forbidden: You can only update your own school details", [], 403);
+			}
+		}
 
 		if (!name) {
 			return errorResponse(res, "Validation failed", [

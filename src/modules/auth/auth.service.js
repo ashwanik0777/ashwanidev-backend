@@ -27,6 +27,7 @@ const SCHOOL_SEEDS = [
   { code: "SOVS",  name: "School of Vocational Studies & Applied Sciences",  slug: "sovs"  },
   { code: "NSS",   name: "National Service Scheme (NSS)",                    slug: "nss"   },
   { code: "NCC",   name: "National Cadet Corps (NCC)",                       slug: "ncc"   },
+  { code: "GBU",   name: "Gautam Buddha University Administration",          slug: "gbu"   },
 ];
 
 const demoUsers = [
