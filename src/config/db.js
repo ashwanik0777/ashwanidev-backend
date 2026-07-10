@@ -10,13 +10,23 @@ const buildPool = () => {
     throw new Error('DATABASE_URL is missing. Set it in .env file.');
   }
 
-  return new Pool({
+  const newPool = new Pool({
     connectionString: env.databaseUrl,
     ssl: env.dbSslEnabled ? { rejectUnauthorized: false } : false,
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
   });
+
+  newPool.on('connect', (client) => {
+    setImmediate(() => {
+      client.query('SET search_path TO public, "$user";').catch((err) => {
+        console.error('Error setting search_path on client connection:', err);
+      });
+    });
+  });
+
+  return newPool;
 };
 
 const getDbPool = () => {
