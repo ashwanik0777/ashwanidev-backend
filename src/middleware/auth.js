@@ -25,6 +25,7 @@ const authenticate = (req, res, next) => {
 };
 
 const authorize = (...allowedRoles) => {
+  const roles = allowedRoles.flat(Infinity);
   return (req, res, next) => {
     if (!req.user?.role) {
       return errorResponse(res, 'Unauthorized', [
@@ -32,7 +33,7 @@ const authorize = (...allowedRoles) => {
       ], 403);
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    if (!roles.includes(req.user.role)) {
       return errorResponse(res, 'Forbidden', [
         { field: 'role', message: 'You do not have permission for this route' },
       ], 403);
