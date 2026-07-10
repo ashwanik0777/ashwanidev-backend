@@ -25,7 +25,7 @@ router.get("/health", (req, res) => {
 router.use("/auth", authRoutes);
 router.use("/dashboard", dashboardRoutes);
 
-router.use("/bookings", bookingRoutes);
+v1Router.use("/bookings", bookingRoutes);
 router.use("/academics", academicRoutes);
 
 // Versioned API surface used by frontend integration.
