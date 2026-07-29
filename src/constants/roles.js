@@ -3,6 +3,7 @@ const ROLES = {
   SCHOOL: 'school',
   FACULTY: 'faculty',
   STAFF: 'staff',
+  STUDENT: 'student',
 };
 
 module.exports = ROLES;
