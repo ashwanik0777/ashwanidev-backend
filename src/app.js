@@ -11,7 +11,10 @@ const errorHandler = require("./middleware/errorHandler");
 const { apiRateLimiter } = require("./middleware/rateLimit");
 
 const app = express();
-app.use(express.json());
+// The admin portal saves an entire school's CMS content (notices, news, events,
+// newsletters and the event gallery) as one JSON document, which quickly exceeds
+// the 100kb express default and used to fail the save with a bare 413.
+app.use(express.json({ limit: env.jsonBodyLimit }));
 app.disable("x-powered-by");
 app.use(helmet());
 app.use(
@@ -21,8 +24,7 @@ app.use(
   }),
 );
 app.use(compression());
-// app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: env.jsonBodyLimit }));
 
 app.use((req, res, next) => {
   req.requestId = req.headers["x-request-id"] || randomUUID();
