@@ -7,6 +7,9 @@ const env = {
   port: Number(process.env.PORT) || 3000,
   host: process.env.HOST || "0.0.0.0",
   databaseUrl: process.env.DATABASE_URL || "",
+  // School CMS content is saved as a single JSON document; 100kb (the express
+  // default) is not enough once a school has a full announcements archive.
+  jsonBodyLimit: process.env.JSON_BODY_LIMIT || "10mb",
   dbSslEnabled: String(process.env.DB_SSL_ENABLED || "false") === "true",
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET || "change-me-access-secret",
   jwtRefreshSecret:
