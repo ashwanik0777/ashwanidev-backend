@@ -13,6 +13,7 @@ const portalRoleMap = {
   school: [ROLES.SCHOOL],
   admin: [ROLES.SUPER_ADMIN],
   super_admin: [ROLES.SUPER_ADMIN],
+  student: [ROLES.STUDENT],
 };
 
 /* ─── All GBU Schools & Orgs ─── */
@@ -48,6 +49,11 @@ const demoUsers = [
   { name: "SOM Admin",    email: "som@gbu.ac.in",    username: "som",    role: ROLES.SCHOOL, password: "Som@1234",   linkedSchoolCode: "SOM",   forceReset: true },
   { name: "SOHSS Admin",  email: "sohss@gbu.ac.in",  username: "sohss",  role: ROLES.SCHOOL, password: "Sohss@123",  linkedSchoolCode: "SOHSS", forceReset: true },
   { name: "SOVS Admin",   email: "sovs@gbu.ac.in",   username: "sovs",   role: ROLES.SCHOOL, password: "Sovs@123",   linkedSchoolCode: "SOVS",  forceReset: true },
+  // Demo student accounts for semester registration testing
+  // student  → fees PAID    (can register)
+  // student2 → fees UNPAID  (blocked from registration)
+  { name: "Rahul Kumar", email: "student@gbu.ac.in", username: "student", role: ROLES.STUDENT, password: "Student@123", linkedSchoolCode: "SOICT", forceReset: false },
+  { name: "Priya Sharma", email: "student2@gbu.ac.in", username: "student2", role: ROLES.STUDENT, password: "Student@123", linkedSchoolCode: "SOM", forceReset: false },
 ];
 
 let authBootstrapped = false;

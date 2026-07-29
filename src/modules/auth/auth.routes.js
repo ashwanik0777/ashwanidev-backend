@@ -3,6 +3,7 @@ const {
   teacherLoginHandler,
   schoolLoginHandler,
   adminLoginHandler,
+  studentLoginHandler,
   refreshHandler,
   logoutHandler,
   meHandler,
@@ -19,6 +20,7 @@ router.post("/login/verify-otp", authRateLimiter, verifyLoginOtpHandler);
 router.post("/login/teacher", authRateLimiter, teacherLoginHandler);
 router.post("/login/school", authRateLimiter, schoolLoginHandler);
 router.post("/login/admin", authRateLimiter, adminLoginHandler);
+router.post("/login/student", authRateLimiter, studentLoginHandler);
 router.post("/refresh", authRateLimiter, refreshHandler);
 router.post("/logout", authRateLimiter, logoutHandler);
 router.post("/forgot-password/request-otp", authRateLimiter, forgotPasswordRequestHandler);
