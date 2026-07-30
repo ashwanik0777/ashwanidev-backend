@@ -4,6 +4,7 @@ const { successResponse, errorResponse } = require("../../utils/response");
 const { getPagination } = require("../../utils/pagination");
 const { authenticate, authorize } = require("../../middleware/auth");
 const ROLES = require("../../constants/roles");
+const { ensureAnnouncementsSchema } = require("../announcements/store");
 
 const router = express.Router();
 
@@ -71,45 +72,51 @@ const buildSortClause = ({ sortBy, order, sortFields, fallbackSortBy }) => {
   return `${selectedColumn} ${selectedOrder}, id DESC`;
 };
 
-const fetchSchoolAnnouncements = async (category) => {
-  try {
-    await query(`
-      CREATE TABLE IF NOT EXISTS schools (
-        id SERIAL PRIMARY KEY,
-        code VARCHAR(50) UNIQUE NOT NULL,
-        name VARCHAR(255) NOT NULL,
-        slug VARCHAR(255) UNIQUE NOT NULL,
-        overview TEXT,
-        is_active BOOLEAN DEFAULT true,
-        content JSONB DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
-    const schoolsResult = await query(
-      "SELECT id, code, name, content FROM schools WHERE is_active = true"
-    );
-    const items = [];
-    for (const school of schoolsResult.rows) {
-      const content = school.content || {};
-      const schoolItems = content[category] || [];
-      if (Array.isArray(schoolItems)) {
-        for (const item of schoolItems) {
-          items.push({
-            ...item,
-            schoolCode: school.code,
-            schoolName: school.name,
-            id: item.id || `${category}-${school.code}-${Date.now()}-${Math.random()}`,
-          });
-        }
-      }
-    }
-    return items;
-  } catch (error) {
-    console.error(`Failed to fetch school announcements for ${category}:`, error);
-    return [];
+/*
+ * Public visibility rules, shared by every announcement endpoint.
+ *
+ * - Only 'published' rows are ever returned (pending/rejected stay internal).
+ * - With ?schoolCode=SOICT: that school's own items plus university-wide ones.
+ * - Without it: university-wide ('college' level) items only.
+ *
+ * Announcements used to live in the schools.content JSONB blob; they are now
+ * real rows in each table (see modules/announcements), so there is one source of
+ * truth for both the dashboards and the public pages.
+ */
+const buildVisibilityClause = (schoolCode, startIndex = 1) => {
+  const params = [];
+  let clause = `t.approval_status = 'published'`;
+
+  if (schoolCode) {
+    params.push(String(schoolCode).trim().toUpperCase());
+    clause += ` AND (UPPER(t.school_code) = $${startIndex} OR t.level = 'college')`;
+  } else {
+    clause += ` AND t.level = 'college'`;
   }
+
+  return { clause, params };
 };
+
+const publicSelect = (table, columns, schoolCode, orderBy) => {
+  const { clause, params } = buildVisibilityClause(schoolCode);
+  return {
+    text: `
+      SELECT ${columns}, t.school_code, t.level, s.name AS school_name
+      FROM ${table} t
+      LEFT JOIN schools s ON UPPER(s.code) = UPPER(t.school_code)
+      WHERE ${clause}
+      ORDER BY ${orderBy}
+    `,
+    params,
+  };
+};
+
+const withSchoolMeta = (mapped, row) => ({
+  ...mapped,
+  schoolCode: row.school_code || null,
+  schoolName: row.school_name || (row.school_code ? row.school_code : "GBU"),
+  level: row.level || "college",
+});
 
 const toDateOnlyString = (value) => {
   if (!value) {
@@ -371,9 +378,16 @@ const isNoticeNew = (publishedDate) => {
   return diffDays <= 7;
 };
 
+/**
+ * Notices carry both the API's `publishedAt`/`category` names and the plain
+ * `publishedDate`/`date`/`type` names the website's normalizer reads. Emitting
+ * only the former is what made the Notices page render "Invalid Date": the
+ * frontend looked for `publishedDate`, found nothing, and fed `new Date("")`
+ * to the formatter.
+ */
 const mapAnnouncement = (row) => {
-  const pubDate = row.published_date;
-  const isNew = row.is_new !== undefined && row.is_new !== null ? row.is_new : isNoticeNew(pubDate);
+  const pubDate = toDateOnlyString(row.published_date);
+  const isNew = row.is_new !== undefined && row.is_new !== null ? row.is_new : isNoticeNew(row.published_date);
   return {
     id: row.id,
     title: row.title,
@@ -381,6 +395,9 @@ const mapAnnouncement = (row) => {
     summary: row.content,
     content: row.content,
     category: row.type,
+    type: row.type,
+    date: pubDate,
+    publishedDate: pubDate,
     tags: [
       String(row.type || "").toLowerCase(),
       String(row.priority || "").toLowerCase(),
@@ -404,12 +421,16 @@ const mapNewsItem = (row) => ({
   title: row.title,
   slug: `news-${row.id}`,
   summary: row.excerpt,
+  excerpt: row.excerpt,
   content: row.content,
   category: row.category,
   tags: parseTagString(row.tags),
   sourceUrl: null,
   coverImageUrl: row.image_url,
-  publishedAt: row.published_date,
+  image: row.image_url,
+  date: toDateOnlyString(row.published_date),
+  publishedDate: toDateOnlyString(row.published_date),
+  publishedAt: toDateOnlyString(row.published_date),
   createdAt: null,
   updatedAt: null,
   author: row.author,
@@ -470,14 +491,18 @@ const mapEvent = (row) => {
 
 const mapMediaGalleryItem = (row) => {
   const images = normalizeJsonArray(row.images);
+  const pubDate = toDateOnlyString(row.published_date);
 
   return {
     id: row.id,
     title: row.title,
     category: row.category,
     year: row.year,
-    publishedAt: row.published_date,
+    date: pubDate,
+    publishedDate: pubDate,
+    publishedAt: pubDate,
     images,
+    coverImage: images[0] || null,
     coverImageUrl: images[0] || null,
   };
 };
@@ -486,9 +511,12 @@ const mapNewsletter = (row) => ({
   id: row.id,
   title: row.title,
   issueNumber: row.issue_number,
-  publishedDate: row.published_date,
+  date: toDateOnlyString(row.published_date),
+  publishedDate: toDateOnlyString(row.published_date),
+  coverImage: row.cover_image_url,
   coverImageUrl: row.cover_image_url,
   excerpt: row.excerpt,
+  pdfLink: row.pdf_url,
   pdfUrl: row.pdf_url,
   views: row.views,
   category: row.category,
@@ -555,65 +583,16 @@ const handleNoticesList = async (req, res) => {
   const { schoolCode } = req.query;
 
   try {
-    const listResult = await query(
-      `
-      SELECT id, title, content, published_date, type, priority, views, is_new, pdf_url
-      FROM notices
-      ORDER BY published_date DESC, id DESC
-      `,
+    await ensureAnnouncementsSchema();
+    const { text, params } = publicSelect(
+      "notices",
+      "t.id, t.title, t.content, t.published_date, t.type, t.priority, t.views, t.is_new, t.pdf_url",
+      schoolCode,
+      "t.published_date DESC NULLS LAST, t.id DESC",
     );
 
-    const globalNotices = listResult.rows.map((row) => ({
-      ...mapAnnouncement(row),
-      schoolCode: null,
-      schoolName: "GBU",
-      level: "college",
-    }));
-
-    const schoolNotices = await fetchSchoolAnnouncements("notices");
-    const normalizedSchoolNotices = schoolNotices.map((item) => {
-      const pubDate = item.date || item.published_date || item.publishedDate || null;
-      const isNew = item.isNew !== undefined ? item.isNew : isNoticeNew(pubDate);
-      return {
-        id: item.id,
-        title: item.title || "",
-        content: item.content || "",
-        published_date: pubDate,
-        type: item.type || "General",
-        priority: item.priority || "medium",
-        views: Number(item.views || 0),
-        is_new: isNew,
-        pdf_url: item.pdfUrl || "",
-        schoolCode: item.schoolCode,
-        schoolName: item.schoolName,
-        level: item.level || "college",
-      };
-    });
-
-    const mappedSchoolNotices = normalizedSchoolNotices.map(row => ({
-      ...mapAnnouncement(row),
-      schoolCode: row.schoolCode,
-      schoolName: row.schoolName,
-      level: row.level,
-    }));
-
-    let allNotices = [...globalNotices, ...mappedSchoolNotices];
-
-    if (schoolCode) {
-      allNotices = allNotices.filter((item) => {
-        const itemSchoolCode = String(item.schoolCode || "").toLowerCase();
-        const targetSchoolCode = String(schoolCode).toLowerCase();
-        return (itemSchoolCode === targetSchoolCode) || (!item.schoolCode && item.level === "college");
-      });
-    } else {
-      allNotices = allNotices.filter((item) => item.level === "college");
-    }
-
-    allNotices.sort((a, b) => {
-      const dateA = new Date(a.publishedAt || 0);
-      const dateB = new Date(b.publishedAt || 0);
-      return dateB - dateA;
-    });
+    const listResult = await query(text, params);
+    const allNotices = listResult.rows.map((row) => withSchoolMeta(mapAnnouncement(row), row));
 
     return successResponse(res, successMessage, allNotices);
   } catch (error) {
@@ -679,69 +658,23 @@ router.get("/notices/:id", async (req, res) => {
 router.get("/news", async (req, res) => {
   const { schoolCode } = req.query;
   try {
-    const listResult = await query(
-      `
-      SELECT
-        id, title, excerpt, content, published_date, author, department,
-        tags, category, priority, views, likes, image_url, is_featured, status
-      FROM news
-      ORDER BY published_date DESC, id DESC
-      `,
+    await ensureAnnouncementsSchema();
+    const { text, params } = publicSelect(
+      "news",
+      `t.id, t.title, t.excerpt, t.content, t.published_date, t.author, t.department,
+       t.tags, t.category, t.priority, t.views, t.likes, t.image_url, t.is_featured,
+       t.status, t.image_link, t.pdf_url, t.external_link`,
+      schoolCode,
+      "t.published_date DESC NULLS LAST, t.id DESC",
     );
 
-    const globalNews = listResult.rows.map((row) => ({
-      ...mapNewsItem(row),
-      schoolCode: null,
-      schoolName: "GBU",
-      level: "college",
+    const listResult = await query(text, params);
+    const allNews = listResult.rows.map((row) => ({
+      ...withSchoolMeta(mapNewsItem(row), row),
+      imageLink: row.image_link || "",
+      pdfUrl: row.pdf_url || "",
+      link: row.external_link || "",
     }));
-
-    const schoolNews = await fetchSchoolAnnouncements("news");
-    const normalizedSchoolNews = schoolNews.map((item) => ({
-      id: item.id,
-      title: item.title || "",
-      excerpt: item.excerpt || "",
-      content: item.content || "",
-      published_date: item.date || item.published_date || item.publishedDate || null,
-      author: item.author || "School Office",
-      department: item.department || item.schoolCode || "",
-      tags: item.tags || [],
-      category: item.category || "General",
-      priority: item.priority || "medium",
-      views: Number(item.views || 0),
-      likes: Number(item.likes || 0),
-      image_url: item.image || item.imageUrl || item.coverImageUrl || "",
-      is_featured: item.featured ?? false,
-      status: item.status || "published",
-      schoolCode: item.schoolCode,
-      schoolName: item.schoolName,
-      level: item.level || "college",
-    }));
-
-    const mappedSchoolNews = normalizedSchoolNews.map(row => ({
-      ...mapNewsItem(row),
-      schoolCode: row.schoolCode,
-      schoolName: row.schoolName,
-      level: row.level,
-    }));
-
-    let allNews = [...globalNews, ...mappedSchoolNews];
-
-    if (schoolCode) {
-      allNews = allNews.filter((item) => {
-        const itemSchoolCode = String(item.schoolCode || "").toLowerCase();
-        const targetSchoolCode = String(schoolCode).toLowerCase();
-        return (itemSchoolCode === targetSchoolCode) || (!item.schoolCode && item.level === "college");
-      });
-    } else {
-      allNews = allNews.filter((item) => item.level === "college");
-    }
-
-    allNews.sort((a, b) => {
-      const dateA = new Date(a.publishedAt || 0);
-      const dateB = new Date(b.publishedAt || 0);
-      return dateB - dateA;
-    });
 
     return successResponse(res, "News fetched successfully", allNews);
   } catch (error) {
@@ -804,19 +737,22 @@ router.get("/news/:id", async (req, res) => {
 });
 
 router.get("/media-gallery", async (req, res) => {
+  const { schoolCode } = req.query;
   try {
-    const listResult = await query(
-      `
-      SELECT id, title, category, year, published_date, images
-      FROM media_gallery
-      ORDER BY published_date DESC, id DESC
-      `,
+    await ensureAnnouncementsSchema();
+    const { text, params } = publicSelect(
+      "media_gallery",
+      "t.id, t.title, t.category, t.year, t.published_date, t.images",
+      schoolCode,
+      "t.published_date DESC NULLS LAST, t.id DESC",
     );
+
+    const listResult = await query(text, params);
 
     return successResponse(
       res,
       "Media gallery fetched successfully",
-      listResult.rows.map(mapMediaGalleryItem),
+      listResult.rows.map((row) => withSchoolMeta(mapMediaGalleryItem(row), row)),
     );
   } catch (error) {
     return errorResponse(
@@ -831,75 +767,24 @@ router.get("/media-gallery", async (req, res) => {
 router.get("/events", async (req, res) => {
   const { schoolCode } = req.query;
   try {
-    const listResult = await query(
-      `
-      SELECT
-        id,
-        title,
-        description,
-        starts_at,
-        time_string,
-        venue,
-        organizer,
-        type,
-        mode,
-        status,
-        price,
-        attendees,
-        cover_image,
-        tags,
-        year
-      FROM events
-      ORDER BY starts_at ASC, id ASC
-      `,
+    await ensureAnnouncementsSchema();
+    const { text, params } = publicSelect(
+      "events",
+      `t.id, t.title, t.description, t.starts_at, t.ends_at, t.time_string, t.venue,
+       t.location, t.organizer, t.type, t.mode, t.status, t.price, t.attendees,
+       t.cover_image, t.image_link, t.registration_url, t.tags, t.gallery, t.year`,
+      schoolCode,
+      "t.starts_at DESC NULLS LAST, t.id DESC",
     );
 
-    const globalEvents = listResult.rows.map((row) => ({
+    const listResult = await query(text, params);
+    const allEvents = listResult.rows.map((row) => ({
       ...row,
-      schoolCode: null,
-      schoolName: "GBU",
-      level: "college",
+      imageLink: row.image_link || "",
+      schoolCode: row.school_code || null,
+      schoolName: row.school_name || (row.school_code ? row.school_code : "GBU"),
+      level: row.level || "college",
     }));
-
-    const schoolEvents = await fetchSchoolAnnouncements("events");
-    const normalizedSchoolEvents = schoolEvents.map((item) => ({
-      id: item.id,
-      title: item.title || "",
-      description: item.description || "",
-      starts_at: item.starts_at || item.startsAt || item.date || null,
-      time_string: item.time_string || item.time || "",
-      venue: item.venue || item.location || "",
-      organizer: item.organizer || item.schoolCode || "GBU",
-      type: item.type || "General",
-      mode: item.mode || "Offline",
-      status: item.status || "published",
-      price: item.price || "Free",
-      attendees: Number(item.attendees || 0),
-      cover_image: item.cover_image || item.image || item.coverImageUrl || "",
-      tags: item.tags || [],
-      year: item.year || "",
-      schoolCode: item.schoolCode,
-      schoolName: item.schoolName,
-      level: item.level || "college",
-    }));
-
-    let allEvents = [...globalEvents, ...normalizedSchoolEvents];
-
-    if (schoolCode) {
-      allEvents = allEvents.filter((item) => {
-        const itemSchoolCode = String(item.schoolCode || "").toLowerCase();
-        const targetSchoolCode = String(schoolCode).toLowerCase();
-        return (itemSchoolCode === targetSchoolCode) || (!item.schoolCode && item.level === "college");
-      });
-    } else {
-      allEvents = allEvents.filter((item) => item.level === "college");
-    }
-
-    allEvents.sort((a, b) => {
-      const dateA = new Date(a.starts_at || 0);
-      const dateB = new Date(b.starts_at || 0);
-      return dateB - dateA;
-    });
 
     return res.status(200).json({
       success: true,
@@ -947,28 +832,23 @@ router.get("/events/:id", async (req, res) => {
 });
 
 router.get("/newsletters", async (req, res) => {
+  const { schoolCode } = req.query;
   try {
-    const listResult = await query(
-      `
-      SELECT
-        id,
-        title,
-        issue_number,
-        published_date,
-        cover_image_url,
-        excerpt,
-        pdf_url,
-        views,
-        category
-      FROM newsletters
-      ORDER BY published_date DESC, id DESC
-      `,
+    await ensureAnnouncementsSchema();
+    const { text, params } = publicSelect(
+      "newsletters",
+      `t.id, t.title, t.issue_number, t.published_date, t.cover_image_url,
+       t.excerpt, t.pdf_url, t.views, t.category`,
+      schoolCode,
+      "t.published_date DESC NULLS LAST, t.id DESC",
     );
+
+    const listResult = await query(text, params);
 
     return successResponse(
       res,
       "Newsletters fetched successfully",
-      listResult.rows.map(mapNewsletter),
+      listResult.rows.map((row) => withSchoolMeta(mapNewsletter(row), row)),
     );
   } catch (error) {
     return errorResponse(
