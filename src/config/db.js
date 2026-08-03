@@ -1,7 +1,23 @@
 
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
 const env = require('./env');
 const { logInfo, logError } = require('./logger');
+
+/*
+ * Return DATE columns as the plain 'YYYY-MM-DD' string Postgres sends.
+ *
+ * By default node-postgres turns a DATE into a JS Date at LOCAL midnight. On a
+ * server in a positive-offset zone (this one runs in IST, +05:30) the usual
+ * `toISOString().slice(0, 10)` formatting then reports the PREVIOUS day — a
+ * closing date saved as 2030-07-20 came back as 2030-07-19. Keeping DATE as a
+ * string removes the conversion, and with it the whole class of off-by-one-day
+ * bugs across tenders, recruitments and announcements.
+ *
+ * 1082 = DATE. Timestamps (1114/1184) are deliberately left alone; they carry a
+ * real time component that the existing code formats intentionally.
+ */
+const PG_DATE_OID = 1082;
+types.setTypeParser(PG_DATE_OID, (value) => value);
 
 let pool;
 
