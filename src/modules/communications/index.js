@@ -122,11 +122,26 @@ const toDateOnlyString = (value) => {
   if (!value) {
     return null;
   }
+
+  // DATE columns arrive as 'YYYY-MM-DD' strings (see config/db.js) — take them
+  // as-is. Formatting a Date via toISOString() would shift the day backwards on
+  // a server running in a positive-offset timezone such as IST.
+  if (typeof value === "string") {
+    const match = value.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) {
+      return match[1];
+    }
+  }
+
   const parsedDate = new Date(value);
   if (Number.isNaN(parsedDate.getTime())) {
     return null;
   }
-  return parsedDate.toISOString().slice(0, 10);
+
+  const year = parsedDate.getFullYear();
+  const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
+  const day = String(parsedDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
 const parseTimeString = (value) => {
