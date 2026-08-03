@@ -13,6 +13,8 @@ const facultyRoutes = require("../modules/faculty");
 const facultyRegistrationRoutes = require("../modules/facultyRegistration");
 const dacRoutes = require("../modules/dac");
 const announcementRoutes = require("../modules/announcements");
+const recruitmentsRoutes = require("../modules/recruitments");
+const universityStatsRoutes = require("../modules/universityStats");
 const router = express.Router();
 const v1Router = express.Router();
 
@@ -40,5 +42,9 @@ v1Router.use("/", usersRoutes);
 v1Router.use("/", facultyRegistrationRoutes);
 v1Router.use("/", dacRoutes);
 v1Router.use("/", announcementRoutes);
+// Also exposed at the root in app.js for older clients; the admin dashboard
+// talks to the versioned surface like every other module.
+v1Router.use("/", recruitmentsRoutes);
+v1Router.use("/", universityStatsRoutes);
 router.use("/v1", v1Router);
 module.exports = router;
