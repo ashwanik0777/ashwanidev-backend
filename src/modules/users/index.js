@@ -330,11 +330,20 @@ const validateRoleLinks = async ({
 			[school.id, linkedDepartment],
 		);
 
+		// If the departments table has entries for this school but none match, it's an error.
+		// If the departments table has NO entries for this school, allow the raw department string.
 		if (!departmentResult.rows.length) {
-			roleErrors.push({
-				field: "linkedDepartment",
-				message: "Linked department does not belong to the selected school",
-			});
+			const schoolDeptCount = await query(
+				`SELECT COUNT(*) as cnt FROM departments WHERE school_id = $1`,
+				[school.id],
+			);
+			if (parseInt(schoolDeptCount.rows[0].cnt) > 0) {
+				roleErrors.push({
+					field: "linkedDepartment",
+					message: "Linked department does not belong to the selected school",
+				});
+			}
+			// else: school has no departments configured, allow raw value
 		}
 
 		return { errors: roleErrors };
@@ -354,7 +363,7 @@ router.get("/admin/accounts", adminAuth, async (req, res) => {
 		const role = normalize(req.query?.role).toLowerCase();
 		const status = normalize(req.query?.status).toLowerCase();
 		const page = toSafeInt(req.query?.page, 1);
-		const limit = clamp(toSafeInt(req.query?.limit, 10), 1, 50);
+		const limit = clamp(toSafeInt(req.query?.limit, 10), 1, 500);
 		const offset = (page - 1) * limit;
 		const { clauses, params } = buildFilters({ queryText, role, status });
 		const whereClause = clauses.join(" AND ");

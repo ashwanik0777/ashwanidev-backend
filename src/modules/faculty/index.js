@@ -139,7 +139,7 @@ router.get("/faculty/public", async (req, res) => {
 		const school = normalize(req.query?.school).toLowerCase();
 		const search = normalize(req.query?.query).toLowerCase();
 		const page = toSafeInt(req.query?.page, 1);
-		const limit = clamp(toSafeInt(req.query?.limit, 50), 1, 100);
+		const limit = clamp(toSafeInt(req.query?.limit, 50), 1, 1000);
 		const offset = (page - 1) * limit;
 
 		const clauses = ["is_active = TRUE"];
