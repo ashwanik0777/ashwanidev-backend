@@ -11,7 +11,7 @@ const tendersRoutes = require("../modules/tenders");
 const usersRoutes = require("../modules/users");
 const facultyRoutes = require("../modules/faculty");
 const facultyRegistrationRoutes = require("../modules/facultyRegistration");
-const dacRoutes = require("../modules/dac");
+const itcellRoutes = require("../modules/itcell");
 const announcementRoutes = require("../modules/announcements");
 const recruitmentsRoutes = require("../modules/recruitments");
 const universityStatsRoutes = require("../modules/universityStats");
@@ -40,7 +40,7 @@ v1Router.use("/", tendersRoutes);
 v1Router.use("/", facultyRoutes);
 v1Router.use("/", usersRoutes);
 v1Router.use("/", facultyRegistrationRoutes);
-v1Router.use("/", dacRoutes);
+v1Router.use("/", itcellRoutes);
 v1Router.use("/", announcementRoutes);
 // Also exposed at the root in app.js for older clients; the admin dashboard
 // talks to the versioned surface like every other module.
