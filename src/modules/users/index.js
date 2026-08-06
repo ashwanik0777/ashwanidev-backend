@@ -14,13 +14,13 @@ const router = express.Router();
 const UI_TO_DB_ROLE = {
 	admin: ROLES.SUPER_ADMIN,
 	school: ROLES.SCHOOL,
-	teacher: ROLES.FACULTY,
+	faculty: ROLES.FACULTY,
 };
 
 const DB_TO_UI_ROLE = {
 	[ROLES.SUPER_ADMIN]: "admin",
 	[ROLES.SCHOOL]: "school",
-	[ROLES.FACULTY]: "teacher",
+	[ROLES.FACULTY]: "faculty",
 };
 
 const AUDIT_ENTITY = "account";
@@ -45,9 +45,9 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 const mapAccount = (row) => ({
 	id: row.id,
 	name: row.name,
-	username: row.username || row.email,
+	username: row.username,
 	password: "",
-	role: DB_TO_UI_ROLE[row.role] || "teacher",
+	role: DB_TO_UI_ROLE[row.role] || "faculty",
 	status: row.is_active ? "active" : "inactive",
 	linkedFacultyId: row.linked_faculty_id || "",
 	linkedSchool: row.linked_school || "",
@@ -247,7 +247,7 @@ const validateRoleLinks = async ({
 		return { errors: roleErrors };
 	}
 
-	if (role === "teacher") {
+	if (role === "faculty") {
 		if (!linkedFacultyId) {
 			roleErrors.push({
 				field: "linkedFacultyId",
@@ -425,7 +425,7 @@ router.post("/admin/accounts", adminAuth, async (req, res) => {
 				[
 					{ field: "username", message: "Username is required" },
 					{ field: "password", message: "Password is required" },
-					{ field: "role", message: "Role must be admin, school, or teacher" },
+					{ field: "role", message: "Role must be admin, school, or faculty" },
 				],
 				400,
 			);
@@ -528,7 +528,7 @@ router.put("/admin/accounts/:id", adminAuth, async (req, res) => {
 
 		const existingResult = await query(
 			`
-			SELECT id, username, role, name, email, linked_faculty_id, linked_school, linked_department, password_hash
+			SELECT id, username, role, name, email, linked_faculty_id, linked_school, linked_department, password_hash, email_verified
 			FROM users
 			WHERE id = $1
 			LIMIT 1
@@ -571,13 +571,14 @@ router.put("/admin/accounts/:id", adminAuth, async (req, res) => {
 				"Validation failed",
 				[
 					{ field: "username", message: "Username is required" },
-					{ field: "role", message: "Role must be admin, school, or teacher" },
+					{ field: "role", message: "Role must be admin, school, or faculty" },
 				],
 				400,
 			);
 		}
 
-		const effectiveRole = role || DB_TO_UI_ROLE[existing.role] || "teacher";
+		const effectiveRole = role || DB_TO_UI_ROLE[existing.role] || "faculty";
+
 		const roleValidation = await validateRoleLinks({
 			role: effectiveRole,
 			linkedFacultyId,
@@ -589,12 +590,11 @@ router.put("/admin/accounts/:id", adminAuth, async (req, res) => {
 		if (roleValidation.errors.length) {
 			return errorResponse(res, "Validation failed", roleValidation.errors, 400);
 		}
-
 		const oldRole = existing.role;
 		const newRole = UI_TO_DB_ROLE[role] || existing.role;
 		const becomingTeacher = newRole === ROLES.FACULTY && oldRole !== ROLES.FACULTY;
 
-		// If role is updated to teacher, lookup their real email from faculty_profiles
+		// If role is updated to faculty, lookup their real email from faculty_profiles
 		let userEmail = makeSyntheticEmail(username);
 		let targetEmail = existing.email;
 		if (newRole === ROLES.FACULTY) {
