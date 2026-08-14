@@ -88,6 +88,8 @@ const KINDS = {
       coverImageUrl: { column: "cover_image", type: "text", aliases: ["coverImage", "image"] },
       imageLink: { column: "image_link", type: "text" },
       registrationUrl: { column: "registration_url", type: "text" },
+      brochureUrl: { column: "brochure_url", type: "text", aliases: ["brochure"] },
+      flyerUrl: { column: "flyer_url", type: "text", aliases: ["flyer"] },
       tags: { column: "tags", type: "jsonArray" },
       images: { column: "gallery", type: "jsonArray", aliases: ["gallery"] },
       agenda: { column: "agenda", type: "jsonArray" },
@@ -150,6 +152,8 @@ const EXTRA_COLUMNS = {
   events: [
     ["location", "VARCHAR(255)"],
     ["image_link", "TEXT"],
+    ["brochure_url", "TEXT"],
+    ["flyer_url", "TEXT"],
   ],
 };
 

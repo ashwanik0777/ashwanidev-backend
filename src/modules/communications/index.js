@@ -483,6 +483,8 @@ const mapEvent = (row) => {
     endsAt,
     coverImageUrl,
     registrationUrl: row.registration_url || null,
+    brochureUrl: row.brochure_url || null,
+    flyerUrl: row.flyer_url || null,
     isFeatured: false,
     isPublished: String(row.status || "").toLowerCase() !== "draft",
     publishedAt: startsAt,
@@ -787,7 +789,8 @@ router.get("/events", async (req, res) => {
       "events",
       `t.id, t.title, t.description, t.starts_at, t.ends_at, t.time_string, t.venue,
        t.location, t.organizer, t.type, t.mode, t.status, t.price, t.attendees,
-       t.cover_image, t.image_link, t.registration_url, t.tags, t.gallery, t.year`,
+       t.cover_image, t.image_link, t.registration_url, t.brochure_url, t.flyer_url,
+       t.tags, t.gallery, t.year`,
       schoolCode,
       "t.starts_at DESC NULLS LAST, t.id DESC",
     );
@@ -796,6 +799,8 @@ router.get("/events", async (req, res) => {
     const allEvents = listResult.rows.map((row) => ({
       ...row,
       imageLink: row.image_link || "",
+      brochureUrl: row.brochure_url || "",
+      flyerUrl: row.flyer_url || "",
       schoolCode: row.school_code || null,
       schoolName: row.school_name || (row.school_code ? row.school_code : "GBU"),
       level: row.level || "college",
