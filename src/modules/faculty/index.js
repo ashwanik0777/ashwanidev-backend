@@ -24,6 +24,49 @@ const safeJsonParse = (value, fallback) => {
 	try { return JSON.parse(value) || fallback; } catch { return fallback; }
 };
 
+/**
+ * Strips empty/blank entries from all arrays inside tab_data before saving.
+ * An entry is considered "empty" if every meaningful field is blank.
+ */
+const sanitizeTabData = (rawTabData) => {
+	if (!rawTabData || typeof rawTabData !== "object") return {};
+
+	const isEmpty = (v) => {
+		if (v === null || v === undefined || v === "") return true;
+		if (typeof v === "number" && v === 0) return true;
+		if (Array.isArray(v) && v.length === 0) return true;
+		if (typeof v === "string" && !v.trim()) return true;
+		return false;
+	};
+
+	const metaFields = new Set(["type", "status", "level", "role", "ranking", "quartile"]);
+
+	const hasContent = (obj) => {
+		if (!obj || typeof obj !== "object") return false;
+		return Object.entries(obj).some(([key, val]) => {
+			if (metaFields.has(key)) return false;
+			if (Array.isArray(val)) return val.some((item) => typeof item === "string" ? item.trim() : !!item);
+			return !isEmpty(val);
+		});
+	};
+
+	const cleaned = {};
+	for (const [sectionKey, sectionVal] of Object.entries(rawTabData)) {
+		if (sectionVal === null || sectionVal === undefined) continue;
+		if (typeof sectionVal !== "object") { cleaned[sectionKey] = sectionVal; continue; }
+		const cleanedSection = {};
+		for (const [subKey, subVal] of Object.entries(sectionVal)) {
+			if (Array.isArray(subVal)) {
+				cleanedSection[subKey] = subVal.filter((item) => hasContent(item));
+			} else {
+				cleanedSection[subKey] = subVal;
+			}
+		}
+		cleaned[sectionKey] = cleanedSection;
+	}
+	return cleaned;
+};
+
 /* ─── Row mappers ─── */
 
 const mapFacultyBasic = (row) => ({
@@ -255,8 +298,8 @@ router.put("/faculty/me/profile", authenticate, authorize(ROLES.FACULTY), async 
 				normalize(b.orcid),
 				normalize(b.phone),
 				JSON.stringify(Array.isArray(b.tags) ? b.tags : []),
-				JSON.stringify(Array.isArray(b.researchAreas) ? b.researchAreas : []),
-				JSON.stringify(b.tabData && typeof b.tabData === "object" ? b.tabData : {}),
+				JSON.stringify(Array.isArray(b.researchAreas) ? b.researchAreas.filter(a => (a.title && a.title.trim()) || (a.description && a.description.trim())) : []),
+				JSON.stringify(sanitizeTabData(b.tabData && typeof b.tabData === "object" ? b.tabData : {})),
 				Number(req.user?.sub) || null,
 			]
 		);
@@ -503,8 +546,8 @@ router.put("/admin/faculty/:id", adminAuth, async (req, res) => {
 				normalize(b.office), normalize(b.image_url), normalize(b.faculty_url),
 				normalize(b.cv), normalize(b.googleScholar), normalize(b.orcid),
 				JSON.stringify(Array.isArray(b.tags) ? b.tags : []),
-				JSON.stringify(Array.isArray(b.researchAreas) ? b.researchAreas : []),
-				JSON.stringify(b.tabData && typeof b.tabData === "object" ? b.tabData : {}),
+				JSON.stringify(Array.isArray(b.researchAreas) ? b.researchAreas.filter(a => (a.title && a.title.trim()) || (a.description && a.description.trim())) : []),
+				JSON.stringify(sanitizeTabData(b.tabData && typeof b.tabData === "object" ? b.tabData : {})),
 				Number(req.user?.sub) || null,
 			]
 		);
