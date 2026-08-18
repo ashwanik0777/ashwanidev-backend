@@ -77,11 +77,11 @@ const buildSortClause = ({ sortBy, order, sortFields, fallbackSortBy }) => {
  *
  * - Only 'published' rows are ever returned (pending/rejected stay internal).
  * - With ?schoolCode=SOICT: that school's own items plus university-wide ones.
- * - Without it: university-wide ('college' level) items only.
+ * - Without schoolCode: ALL published items (every school + university-wide).
  *
- * Announcements used to live in the schools.content JSONB blob; they are now
- * real rows in each table (see modules/announcements), so there is one source of
- * truth for both the dashboards and the public pages.
+ * The frontend's global /announcements/* pages call without schoolCode and
+ * should display everything. School-specific pages pass their schoolCode to
+ * see their own items plus college-level ones.
  */
 const buildVisibilityClause = (schoolCode, startIndex = 1) => {
   const params = [];
@@ -90,9 +90,8 @@ const buildVisibilityClause = (schoolCode, startIndex = 1) => {
   if (schoolCode) {
     params.push(String(schoolCode).trim().toUpperCase());
     clause += ` AND (UPPER(t.school_code) = $${startIndex} OR t.level = 'college')`;
-  } else {
-    clause += ` AND t.level = 'college'`;
   }
+  // Without schoolCode: no extra filter — return all published items.
 
   return { clause, params };
 };
