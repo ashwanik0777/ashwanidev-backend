@@ -250,38 +250,62 @@ const buildRejectionEmail = (recipientName, reason, portalName = "Faculty Portal
   });
 };
 
+const formatDate = (dateString) => {
+  if (!dateString) return "N/A";
+  try {
+    const d = new Date(dateString);
+    return d.toLocaleString('en-IN', {
+      weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  } catch (e) {
+    return dateString;
+  }
+};
+
 const buildBookingNotificationEmail = (inChargeName, booking) => {
   const safeName = normalize(inChargeName) || "In-Charge";
-  const title = `New Facility Booking Request - ${booking.token}`;
+  const bToken = normalize(booking.token);
+  const bFacility = normalize(booking.facilityName || booking.facility_name);
+  const bUser = normalize(booking.userName || booking.user_name);
+  const bOrg = normalize(booking.organization);
+  const bPurpose = normalize(booking.purpose);
+  const bEmail = normalize(booking.userEmail || booking.user_email);
+  const bPhone = normalize(booking.userPhonePrimary || booking.user_phone_primary);
+  const bPhoneSec = normalize(booking.userPhoneSecondary || booking.user_phone_secondary);
+  const bStart = formatDate(booking.startTime || booking.start_time);
+  const bEnd = formatDate(booking.endTime || booking.end_time);
+
+  const title = `New Facility Booking Request - ${bToken}`;
   
   const contentHtml = `
     <p>Dear ${safeName},</p>
-    <p>A new booking request has been submitted for the facility: <strong>${normalize(booking.facilityName)}</strong>.</p>
+    <p>A new booking request has been submitted for the facility: <strong>${bFacility}</strong>.</p>
     <p>Please review the details below:</p>
     <table class="table-details">
       <tr>
         <td class="lbl">Booking Token:</td>
-        <td class="val">${normalize(booking.token)}</td>
+        <td class="val">${bToken}</td>
       </tr>
       <tr>
         <td class="lbl">Applicant Name:</td>
-        <td class="val">${normalize(booking.userName)}</td>
+        <td class="val">${bUser}</td>
       </tr>
       <tr>
         <td class="lbl">Organization:</td>
-        <td class="val">${normalize(booking.organization || "N/A")}</td>
+        <td class="val">${bOrg || "N/A"}</td>
       </tr>
       <tr>
         <td class="lbl">Schedule:</td>
-        <td class="val">${normalize(booking.startTime)} to ${normalize(booking.endTime)}</td>
+        <td class="val">${bStart} to ${bEnd}</td>
       </tr>
       <tr>
         <td class="lbl">Purpose:</td>
-        <td class="val">${normalize(booking.purpose)}</td>
+        <td class="val">${bPurpose}</td>
       </tr>
       <tr>
         <td class="lbl">Contact:</td>
-        <td class="val">${normalize(booking.userEmail)}<br/>${normalize(booking.userPhonePrimary)} / ${normalize(booking.userPhoneSecondary)}</td>
+        <td class="val">${bEmail}<br/>${bPhone} ${bPhoneSec ? '/ ' + bPhoneSec : ''}</td>
       </tr>
     </table>
     <p>Please log in to the GBU Admin Portal to approve or reject this booking request.</p>
@@ -298,38 +322,58 @@ const buildBookingNotificationEmail = (inChargeName, booking) => {
 
 const buildBookingStatusEmail = (userName, booking, status, remarks) => {
   const safeName = normalize(userName) || "Applicant";
-  const title = `Facility Booking Update - ${booking.token}`;
+  const bToken = normalize(booking.token);
+  const bFacility = normalize(booking.facilityName || booking.facility_name);
+  const bStart = formatDate(booking.startTime || booking.start_time);
+  const bEnd = formatDate(booking.endTime || booking.end_time);
+  const isPending = String(status).toLowerCase() === "pending";
   const isRejected = String(status).toLowerCase() === "rejected";
+  const isApproved = String(status).toLowerCase() === "approved";
+  
+  const title = isPending ? `Facility Booking Received - ${bToken}` : `Facility Booking Update - ${bToken}`;
 
   const contentHtml = `
     <p>Dear ${safeName},</p>
-    <p>The status of your booking request for <strong>${normalize(booking.facilityName)}</strong> has been updated.</p>
-    <p><strong>Current Status: <span style="color: ${isRejected ? '#dc2626' : '#16a34a'}; text-transform: uppercase;">${normalize(status)}</span></strong></p>
+    <p>${isPending 
+      ? `Your booking request for <strong>${bFacility}</strong> has been successfully submitted and is currently pending administrative review.` 
+      : `The status of your booking request for <strong>${bFacility}</strong> has been updated.`}</p>
+      
+    <p><strong>Current Status: <span style="color: ${isRejected ? '#dc2626' : (isPending ? '#d97706' : '#16a34a')}; text-transform: uppercase;">${normalize(status)}</span></strong></p>
+    
     <table class="table-details">
       <tr>
         <td class="lbl">Booking Token:</td>
-        <td class="val">${normalize(booking.token)}</td>
+        <td class="val">${bToken}</td>
       </tr>
       <tr>
         <td class="lbl">Schedule:</td>
-        <td class="val">${normalize(booking.startTime)} to ${normalize(booking.endTime)}</td>
+        <td class="val">${bStart} to ${bEnd}</td>
       </tr>
     </table>
+    
     ${isRejected && remarks ? `
     <div style="padding: 12px; background-color: #fef2f2; border-left: 3px solid #dc2626; border-radius: 6px; margin: 16px 0; font-size: 12px; color: #991b1b; line-height: 1.4;">
       <div style="font-weight: 700; margin-bottom: 2px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px;">Rejection Remarks</div>
       ${normalize(remarks)}
     </div>` : ""}
-    ${!isRejected ? `
+    
+    ${isPending ? `
+    <div style="margin-top: 20px; padding: 12px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+      <p style="margin: 0; font-size: 13px; color: #475569;"><strong>How to track your request?</strong><br/>You can track the live status of your application anytime by visiting the GBU Booking Portal and entering your <strong>Booking Token</strong>.</p>
+    </div>
+    ` : ""}
+
+    ${isApproved ? `
     <p>Please coordinate with the facility in-charge for access and other arrangements.</p>
     ` : ""}
+    
     <p>Regards,<br/><strong>GBU Facilities Team</strong></p>
   `;
 
   return buildBaseTemplate({
     title,
     contentHtml,
-    portalName: "School Portal",
+    portalName: "GBU Booking Portal",
     isDanger: isRejected
   });
 };

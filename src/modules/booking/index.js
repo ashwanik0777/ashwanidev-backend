@@ -230,7 +230,7 @@ router.post("/", async (req, res) => {
     } = req.body;
 
     // Validate inputs
-    if (!userName || !userEmail || !userPhonePrimary || !userPhoneSecondary || !purpose || !startTime || !endTime || !facilityId || !facilityName || !emailVerificationToken) {
+    if (!userName || !userEmail || !userPhonePrimary || !purpose || !startTime || !endTime || !facilityId || !facilityName || !emailVerificationToken) {
       return errorResponse(res, "All fields are required to complete the booking", [], 400);
     }
 
@@ -238,8 +238,8 @@ router.post("/", async (req, res) => {
       return errorResponse(res, "Invalid email format", [], 400);
     }
 
-    if (!MOBILE_RE.test(normalize(userPhonePrimary)) || !MOBILE_RE.test(normalize(userPhoneSecondary))) {
-      return errorResponse(res, "Mobile numbers must be exactly 10 digits", [], 400);
+    if (!MOBILE_RE.test(normalize(userPhonePrimary))) {
+      return errorResponse(res, "Primary mobile number must be exactly 10 digits", [], 400);
     }
 
     // Verify token
