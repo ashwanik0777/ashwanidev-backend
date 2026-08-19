@@ -15,6 +15,7 @@ const itcellRoutes = require("../modules/itcell");
 const announcementRoutes = require("../modules/announcements");
 const recruitmentsRoutes = require("../modules/recruitments");
 const universityStatsRoutes = require("../modules/universityStats");
+const tickerNoticesRoutes = require("../modules/tickerNotices");
 const router = express.Router();
 const v1Router = express.Router();
 
@@ -46,5 +47,6 @@ v1Router.use("/", announcementRoutes);
 // talks to the versioned surface like every other module.
 v1Router.use("/", recruitmentsRoutes);
 v1Router.use("/", universityStatsRoutes);
+v1Router.use("/", tickerNoticesRoutes);
 router.use("/v1", v1Router);
 module.exports = router;
