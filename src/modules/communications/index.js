@@ -807,6 +807,8 @@ router.get("/events", async (req, res) => {
     const listResult = await query(text, params);
     const allEvents = listResult.rows.map((row) => ({
       ...row,
+      coverImageUrl: row.cover_image || "",
+      coverImage: row.cover_image || "",
       imageLink: row.image_link || "",
       brochureUrl: row.brochure_url || "",
       flyerUrl: row.flyer_url || "",
