@@ -534,6 +534,8 @@ const mapNewsletter = (row) => ({
   excerpt: row.excerpt,
   pdfLink: row.pdf_url,
   pdfUrl: row.pdf_url,
+  englishPdfLink: row.english_pdf_url || row.pdf_url,
+  hindiPdfLink: row.hindi_pdf_url,
   views: row.views,
   category: row.category,
 });
@@ -857,7 +859,7 @@ router.get("/newsletters", async (req, res) => {
     const { text, params } = publicSelect(
       "newsletters",
       `t.id, t.title, t.issue_number, t.published_date, t.cover_image_url,
-       t.excerpt, t.pdf_url, t.views, t.category`,
+       t.excerpt, t.pdf_url, t.english_pdf_url, t.hindi_pdf_url, t.views, t.category`,
       schoolCode,
       "t.published_date DESC NULLS LAST, t.id DESC",
     );

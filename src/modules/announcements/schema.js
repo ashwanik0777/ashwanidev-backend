@@ -107,7 +107,9 @@ const KINDS = {
       date: { column: "published_date", type: "date", aliases: ["publishedDate"] },
       coverImage: { column: "cover_image_url", type: "text", aliases: ["coverImageUrl"] },
       excerpt: { column: "excerpt", type: "text" },
-      pdfLink: { column: "pdf_url", type: "text", aliases: ["pdfUrl"] },
+      pdfUrl: { column: "pdf_url", type: "text" },
+      englishPdfLink: { column: "english_pdf_url", type: "text", aliases: ["pdfLink"] },
+      hindiPdfLink: { column: "hindi_pdf_url", type: "text" },
       views: { column: "views", type: "int", default: 0 },
       category: { column: "category", type: "text", default: "School Update" },
     },
@@ -154,6 +156,10 @@ const EXTRA_COLUMNS = {
     ["image_link", "TEXT"],
     ["brochure_url", "TEXT"],
     ["flyer_url", "TEXT"],
+  ],
+  newsletters: [
+    ["english_pdf_url", "TEXT"],
+    ["hindi_pdf_url", "TEXT"],
   ],
 };
 
