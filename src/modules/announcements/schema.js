@@ -125,6 +125,7 @@ const KINDS = {
       year: { column: "year", type: "text" },
       date: { column: "published_date", type: "date", aliases: ["publishedDate"] },
       images: { column: "images", type: "jsonArray" },
+      coverImage: { column: "cover_image", type: "text", aliases: ["coverImageUrl"] },
     },
   },
 };
@@ -160,6 +161,9 @@ const EXTRA_COLUMNS = {
   newsletters: [
     ["english_pdf_url", "TEXT"],
     ["hindi_pdf_url", "TEXT"],
+  ],
+  gallery: [
+    ["cover_image", "TEXT"],
   ],
 };
 

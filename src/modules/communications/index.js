@@ -508,6 +508,7 @@ const mapEvent = (row) => {
 const mapMediaGalleryItem = (row) => {
   const images = normalizeJsonArray(row.images);
   const pubDate = toDateOnlyString(row.published_date);
+  const cover = row.cover_image || images[0] || null;
 
   return {
     id: row.id,
@@ -518,8 +519,8 @@ const mapMediaGalleryItem = (row) => {
     publishedDate: pubDate,
     publishedAt: pubDate,
     images,
-    coverImage: images[0] || null,
-    coverImageUrl: images[0] || null,
+    coverImage: cover,
+    coverImageUrl: cover,
   };
 };
 
@@ -760,7 +761,7 @@ router.get("/media-gallery", async (req, res) => {
     await ensureAnnouncementsSchema();
     const { text, params } = publicSelect(
       "media_gallery",
-      "t.id, t.title, t.category, t.year, t.published_date, t.images",
+      "t.id, t.title, t.category, t.year, t.published_date, t.images, t.cover_image",
       schoolCode,
       "t.published_date DESC NULLS LAST, t.id DESC",
     );
