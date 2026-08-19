@@ -787,6 +787,13 @@ router.get("/events", async (req, res) => {
   const { schoolCode } = req.query;
   try {
     await ensureAnnouncementsSchema();
+
+    // Auto-update stale "upcoming" events whose date has passed
+    await query(`
+      UPDATE events SET status = 'past'
+      WHERE status = 'upcoming' AND starts_at < CURRENT_DATE
+    `);
+
     const { text, params } = publicSelect(
       "events",
       `t.id, t.title, t.description, t.starts_at, t.ends_at, t.time_string, t.venue,

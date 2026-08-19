@@ -58,6 +58,7 @@ const createRoleLoginHandler = (portalRole, roleLabel) => {
 };
 
 const teacherLoginHandler = createRoleLoginHandler("teacher", "Teacher");
+const facultyLoginHandler = createRoleLoginHandler("faculty", "Faculty");
 const schoolLoginHandler = createRoleLoginHandler("school", "School");
 const adminLoginHandler = createRoleLoginHandler("admin", "Admin");
 const studentLoginHandler = createRoleLoginHandler("student", "Student");
@@ -207,6 +208,7 @@ const meHandler = (req, res) => {
 
 module.exports = {
   verifyLoginOtpHandler,
+  facultyLoginHandler,
   teacherLoginHandler,
   schoolLoginHandler,
   adminLoginHandler,
