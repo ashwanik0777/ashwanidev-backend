@@ -95,7 +95,7 @@ const ensureRegistrationSchema = async () => {
    ═══════════════════════════════════════════════════════════════ */
 
 // POST /faculty-registration/send-otp
-router.post("/faculty-registration/send-otp", async (req, res) => {
+router.post("/faculty-registration/send-otp", async (req, res) => { return res.status(403).json({ success: false, message: "Faculty registration is currently disabled." });
 	try {
 		await ensureRegistrationSchema();
 
@@ -193,7 +193,7 @@ router.post("/faculty-registration/verify-otp", async (req, res) => {
 });
 
 // POST /faculty-registration/register
-router.post("/faculty-registration/register", async (req, res) => {
+router.post("/faculty-registration/register", async (req, res) => { return res.status(403).json({ success: false, message: "Faculty registration is currently disabled." });
 	try {
 		await ensureRegistrationSchema();
 
