@@ -36,10 +36,10 @@ const ensureDacTable = async () => {
     await query(`
       INSERT INTO itcell_team_members (name, role, department, designation, image, email, team_type, sort_order)
       VALUES 
-      ('Dr. Gaurav Kumar', 'Chairperson', 'School of ICT', 'Assistant Professor', 'https://faculty.gbu.ac.in/uploads/photos/6721e9346dac1_Photo-removebg-preview.png', 'gaurav.kumar@gbu.ac.in', 'faculty', 0),
-      ('Dr. Arti Gautam Dinkar', 'Member', 'School of ICT', 'Assistant Professor', '', 'arti.gautam@gbu.ac.in', 'faculty', 1),
-      ('Dr. Rakesh Kumar', 'Member', 'School of ICT', 'Assistant Professor', '', 'rakesh.kumar@gbu.ac.in', 'faculty', 2),
-      ('Ms. Pallavi Upadhyay', 'Convener', 'CCC', 'Technical Superintendent', '', 'pallavi.upadhyay@gbu.ac.in', 'faculty', 3)
+      ('Dr. Gaurav Kumar', 'Chairperson', 'School of ICT', 'Assistant Professor', '/assets/Faculty/SOICT-F0001.jpg', 'gaurav.kumar@gbu.ac.in', 'faculty', 0),
+      ('Dr. Arti Gautam Dinkar', 'Member', 'School of ICT', 'Assistant Professor', '/assets/Faculty/SOICT-F0003.jpg', 'arti.gautam@gbu.ac.in', 'faculty', 1),
+      ('Dr. Rakesh Kumar', 'Member', 'School of ICT', 'Assistant Professor', '/assets/Faculty/SOICT-F0023.jpg', 'rakesh.kumar@gbu.ac.in', 'faculty', 2),
+      ('Ms. Pallavi Upadhyay', 'Convener', 'CCC', 'Technical Superintendent', '/assets/Faculty/Pallavi.jpeg', 'pallavi.upadhyay@gbu.ac.in', 'faculty', 3)
     `);
 
     // Insert Student (Ashwani Kushwaha)
