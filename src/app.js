@@ -19,7 +19,17 @@ app.disable("x-powered-by");
 app.use(helmet());
 app.use(
   cors({
-    origin: env.corsOrigin.split(",").map((item) => item.trim()),
+    origin: (origin, callback) => {
+      if (!origin || env.nodeEnv === "development") {
+        return callback(null, true);
+      }
+      const allowedOrigins = env.corsOrigin.split(",").map((item) => item.trim());
+      if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   }),
 );
