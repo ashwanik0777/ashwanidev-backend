@@ -510,7 +510,7 @@ router.put("/admin/faculty/:id", adminAuth, async (req, res) => {
 		const name = normalize(req.body?.name);
 		if (!id || !name) return errorResponse(res, "Validation failed", [{ field: "id", message: "Faculty id is required" }, { field: "name", message: "Faculty name is required" }], 400);
 
-		const checkRes = await query(`SELECT school_code, school FROM faculty_profiles WHERE id = $1 LIMIT 1`, [id]);
+		const checkRes = await query(`SELECT ${FULL_SELECT} FROM faculty_profiles WHERE id = $1 LIMIT 1`, [id]);
 		if (!checkRes.rows.length) return errorResponse(res, "Faculty not found", [], 404);
 		
 		if (req.user?.role === ROLES.SCHOOL) {
@@ -522,13 +522,17 @@ router.put("/admin/faculty/:id", adminAuth, async (req, res) => {
 			}
 		}
 
+		const existing = checkRes.rows[0];
 		const b = req.body || {};
 		if (req.user?.role === ROLES.SCHOOL) {
 			b.school = normalize(req.user?.schoolCode) || b.school;
 		}
 
-		const targetSchool = normalize(b.school);
-		const targetSchoolCode = normalize(b.school_code) || targetSchool.toUpperCase();
+		// Helper: use incoming value if provided (even if empty string), else keep existing
+		const pick = (incoming, existingVal) => incoming !== undefined ? incoming : existingVal;
+
+		const targetSchool = normalize(pick(b.school, existing.school));
+		const targetSchoolCode = normalize(pick(b.school_code, existing.school_code)) || targetSchool.toUpperCase();
 
 		const result = await query(
 			`UPDATE faculty_profiles SET
@@ -539,15 +543,30 @@ router.put("/admin/faculty/:id", adminAuth, async (req, res) => {
 				updated_by=$25, updated_at=NOW()
 			WHERE id=$1 RETURNING ${FULL_SELECT}`,
 			[
-				id, name, normalize(b.designation), normalize(b.department), targetSchool, targetSchoolCode,
-				normalize(b.email).toLowerCase(), normalize(b.phone), b.isActive !== false,
-				normalize(b.specialization), toSafeInt(b.experience_years, 0), toSafeInt(b.publications, 0),
-				normalize(b.education), normalize(b.shortBio), normalize(b.fullBio),
-				normalize(b.office), normalize(b.image_url), normalize(b.faculty_url),
-				normalize(b.cv), normalize(b.googleScholar), normalize(b.orcid),
-				JSON.stringify(Array.isArray(b.tags) ? b.tags : []),
-				JSON.stringify(Array.isArray(b.researchAreas) ? b.researchAreas.filter(a => (a.title && a.title.trim()) || (a.description && a.description.trim())) : []),
-				JSON.stringify(sanitizeTabData(b.tabData && typeof b.tabData === "object" ? b.tabData : {})),
+				id,
+				name,
+				normalize(pick(b.designation, existing.designation)),
+				normalize(pick(b.department, existing.department)),
+				targetSchool,
+				targetSchoolCode,
+				normalize(pick(b.email, existing.email)).toLowerCase(),
+				normalize(pick(b.phone, existing.phone)),
+				b.isActive !== undefined ? b.isActive !== false : existing.is_active,
+				normalize(pick(b.specialization, existing.specialization)),
+				toSafeInt(pick(b.experience_years, existing.experience_years), 0),
+				toSafeInt(pick(b.publications, existing.publications_count), 0),
+				normalize(pick(b.education, existing.education)),
+				normalize(pick(b.shortBio, existing.short_bio)),
+				normalize(pick(b.fullBio, existing.full_bio)),
+				normalize(pick(b.office, existing.office)),
+				normalize(pick(b.image_url, existing.image_url)),
+				normalize(pick(b.faculty_url, existing.faculty_url)),
+				normalize(pick(b.cv, existing.cv_link)),
+				normalize(pick(b.googleScholar, existing.google_scholar)),
+				normalize(pick(b.orcid, existing.orcid)),
+				JSON.stringify(b.tags !== undefined ? (Array.isArray(b.tags) ? b.tags : []) : safeJsonParse(existing.tags, [])),
+				JSON.stringify(b.researchAreas !== undefined ? (Array.isArray(b.researchAreas) ? b.researchAreas.filter(a => (a.title && a.title.trim()) || (a.description && a.description.trim())) : []) : safeJsonParse(existing.research_areas, [])),
+				JSON.stringify(b.tabData !== undefined ? sanitizeTabData(b.tabData && typeof b.tabData === "object" ? b.tabData : {}) : safeJsonParse(existing.tab_data, {})),
 				Number(req.user?.sub) || null,
 			]
 		);
