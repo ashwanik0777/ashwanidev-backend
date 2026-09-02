@@ -16,6 +16,7 @@ const announcementRoutes = require("../modules/announcements");
 const recruitmentsRoutes = require("../modules/recruitments");
 const universityStatsRoutes = require("../modules/universityStats");
 const tickerNoticesRoutes = require("../modules/tickerNotices");
+const uploadRoutes = require("../modules/uploads");
 const router = express.Router();
 const v1Router = express.Router();
 
@@ -48,5 +49,6 @@ v1Router.use("/", announcementRoutes);
 v1Router.use("/", recruitmentsRoutes);
 v1Router.use("/", universityStatsRoutes);
 v1Router.use("/", tickerNoticesRoutes);
+v1Router.use("/", uploadRoutes);
 router.use("/v1", v1Router);
 module.exports = router;
