@@ -233,7 +233,7 @@ router.put("/admin/schools/:id", authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
 			if (!schoolCheck.rows.length) {
 				return errorResponse(res, "School not found", [], 404);
 			}
-			if (schoolCheck.rows[0].code !== req.user.linkedSchoolCode) {
+			if (schoolCheck.rows[0].code !== req.user.schoolCode) {
 				return errorResponse(res, "Forbidden: You can only update your own school details", [], 403);
 			}
 		}
