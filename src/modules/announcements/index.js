@@ -106,11 +106,16 @@ router.get(
       const params = [];
 
       if (!actor.isAdmin) {
-        // Schools see their own items plus published university-wide notices.
-        params.push(actor.schoolCode);
-        where.push(
-          `(UPPER(t.school_code) = $${params.length} OR (t.level = '${LEVELS.COLLEGE}' AND t.approval_status = '${APPROVAL.PUBLISHED}'))`,
-        );
+        // Schools see only their own items — never another school's data.
+        // Use the JWT school code, falling back to the query param if needed.
+        const effectiveSchool = actor.schoolCode || normalizeSchoolCode(schoolCode);
+        if (effectiveSchool) {
+          params.push(effectiveSchool);
+          where.push(`UPPER(t.school_code) = $${params.length}`);
+        } else {
+          // No school code at all — return nothing rather than leaking data.
+          where.push("FALSE");
+        }
       } else if (schoolCode) {
         params.push(normalizeSchoolCode(schoolCode));
         where.push(`UPPER(t.school_code) = $${params.length}`);

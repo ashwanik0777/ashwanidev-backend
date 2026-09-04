@@ -6,6 +6,7 @@ const { authenticate, authorize } = require("../../middleware/auth");
 const { ensureAuthBootstrap } = require("../auth/auth.service");
 const ROLES = require("../../constants/roles");
 const { generateFacultyId, resolveSchoolCode } = require("../../utils/facultyIdGenerator");
+const { sendMail } = require("../../utils/mailer");
 
 const router = express.Router();
 
@@ -481,6 +482,38 @@ router.post("/admin/faculty", adminAuth, async (req, res) => {
 					);
 
 					loginAccount = { username: finalUsername, password: plainPassword };
+
+					// Send credentials email to the new faculty
+					try {
+						const loginUrl = process.env.APP_BASE_URL || "http://localhost:5173";
+						await sendMail({
+							to: facultyEmail,
+							subject: "Your Faculty Portal Login Credentials - GBU",
+							text: `Dear ${name},\n\nYour faculty portal account has been created.\n\nUsername: ${finalUsername}\nPassword: ${plainPassword}\nLogin URL: ${loginUrl}/login\n\nPlease change your password after your first login.\n\nRegards,\nGBU Administration`,
+							html: `
+								<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+									<div style="background: linear-gradient(135deg, #0ea5e9, #2563eb); padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+										<img src="cid:gbulogo" alt="GBU" style="height: 50px; margin-bottom: 8px;" />
+										<h2 style="color: white; margin: 0; font-size: 20px;">Faculty Portal Credentials</h2>
+									</div>
+									<div style="border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">
+										<p style="color: #334155; font-size: 15px;">Dear <strong>${name}</strong>,</p>
+										<p style="color: #475569; font-size: 14px;">Your faculty portal account has been created successfully. Here are your login credentials:</p>
+										<div style="background: #f1f5f9; border-radius: 8px; padding: 16px; margin: 16px 0;">
+											<table style="width: 100%; border-collapse: collapse;">
+												<tr><td style="padding: 6px 0; color: #64748b; font-size: 13px;">Username</td><td style="padding: 6px 0; font-weight: bold; color: #0f172a; font-size: 14px;">${finalUsername}</td></tr>
+												<tr><td style="padding: 6px 0; color: #64748b; font-size: 13px;">Password</td><td style="padding: 6px 0; font-weight: bold; color: #0f172a; font-size: 14px;">${plainPassword}</td></tr>
+											</table>
+										</div>
+										<a href="${loginUrl}/login" style="display: inline-block; background: #0ea5e9; color: white; padding: 10px 24px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: bold; margin: 8px 0;">Login to Portal</a>
+										<p style="color: #94a3b8; font-size: 12px; margin-top: 16px;">Please change your password after your first login for security.</p>
+									</div>
+								</div>
+							`,
+						});
+					} catch (emailErr) {
+						console.error("Failed to send credentials email:", emailErr.message);
+					}
 				}
 			} catch (loginErr) {
 				// Log but don't fail the entire request – faculty was created successfully
