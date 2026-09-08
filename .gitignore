@@ -43,8 +43,8 @@ temp/
 !src/db/*.sql
 
 # File uploads / generated media (if local)
-uploads/
-public/uploads/
+/uploads/
+/public/uploads/
 
 # OS files
 .DS_Store
