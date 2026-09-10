@@ -33,6 +33,11 @@ const env = {
     (String(process.env.NODE_ENV || "development") === "production" ? 300 : 2000),
   authRateLimitWindowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX) || 20,
+  
+  // Cloudinary Config
+  cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
+  cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || "",
+  cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || "",
 };
 
 module.exports = env;
