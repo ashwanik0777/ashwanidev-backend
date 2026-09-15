@@ -24,6 +24,15 @@ const getTransporter = () => {
         user: env.smtpUser,
         pass: env.smtpPass,
       },
+      // Connection pooling — reuse the same SMTP connection for multiple emails
+      // instead of login/logout for each one (which triggers Google's rate limit)
+      pool: true,
+      maxConnections: 1,
+      maxMessages: 10,
+      // Increase timeouts for bulk operations
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
   }
 
@@ -42,7 +51,16 @@ const getLogoPath = () => {
   return null;
 };
 
-const sendMail = async ({ to, subject, text, html }) => {
+/**
+ * Helper to wait for a given number of milliseconds.
+ */
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Send a single email with retry logic.
+ * On "Too many login attempts" (454 error), waits and retries.
+ */
+const sendMail = async ({ to, subject, text, html }, retries = 2) => {
   const transport = getTransporter();
 
   if (!transport) {
@@ -50,42 +68,64 @@ const sendMail = async ({ to, subject, text, html }) => {
     return { queued: false };
   }
 
-  try {
-    const mailOptions = {
-      from: env.smtpFrom,
-      to,
-      subject,
-      text,
-      html,
-    };
+  const mailOptions = {
+    from: env.smtpFrom,
+    to,
+    subject,
+    text,
+    html,
+  };
 
-    if (html && html.includes("cid:gbulogo")) {
-      const logoPath = getLogoPath();
-      if (logoPath) {
-        mailOptions.attachments = [
-          {
-            filename: 'logo1.png',
-            path: logoPath,
-            cid: 'gbulogo'
-          }
-        ];
-      }
+  if (html && html.includes("cid:gbulogo")) {
+    const logoPath = getLogoPath();
+    if (logoPath) {
+      mailOptions.attachments = [
+        {
+          filename: 'logo1.png',
+          path: logoPath,
+          cid: 'gbulogo'
+        }
+      ];
     }
+  }
 
-    const result = await transport.sendMail(mailOptions);
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const result = await transport.sendMail(mailOptions);
+      return { queued: true, messageId: result.messageId };
+    } catch (error) {
+      const isRateLimit =
+        error.responseCode === 454 ||
+        (error.message && error.message.includes("Too many login attempts"));
 
-    return { queued: true, messageId: result.messageId };
-  } catch (error) {
-    logError("Failed to send email", {
-      to,
-      subject,
-      error: error.message,
-    });
-    throw error;
+      if (isRateLimit && attempt < retries) {
+        // Wait before retrying — exponential backoff (10s, then 30s)
+        const waitTime = (attempt + 1) * 10000 + Math.random() * 5000;
+        logInfo(`Rate limited by SMTP. Waiting ${Math.round(waitTime / 1000)}s before retry ${attempt + 1}/${retries}`, { to });
+
+        // Force close and recreate transporter to get a fresh connection
+        try {
+          transporter.close();
+        } catch (_) { /* ignore */ }
+        transporter = null;
+
+        await delay(waitTime);
+        continue;
+      }
+
+      logError("Failed to send email", {
+        to,
+        subject,
+        error: error.message,
+        attempt: attempt + 1,
+      });
+      throw error;
+    }
   }
 };
 
 module.exports = {
   sendMail,
   isMailConfigured,
+  delay,
 };

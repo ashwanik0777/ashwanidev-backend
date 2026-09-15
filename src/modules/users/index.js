@@ -4,7 +4,7 @@ const { query } = require("../../config/db");
 const { successResponse, errorResponse } = require("../../utils/response");
 const { authenticate, authorize } = require("../../middleware/auth");
 const { ensureAuthBootstrap } = require("../auth/auth.service");
-const { sendMail, isMailConfigured } = require("../../utils/mailer");
+const { sendMail, isMailConfigured, delay } = require("../../utils/mailer");
 const ROLES = require("../../constants/roles");
 const env = require("../../config/env");
 const { buildCredentialsEmail } = require("../../utils/mailTemplate");
@@ -923,39 +923,58 @@ router.post("/admin/accounts/dispatch-credential-emails", adminAuth, async (req,
 		}
 
 		const dispatchResults = [];
-		for (const item of items) {
-			const queueId = normalize(item?.id) || `queue-${Date.now()}`;
-			const to = normalize(item?.to);
-			const subject = normalize(item?.subject) || "GBU Faculty Portal Credentials";
-			const payload = item?.payload && typeof item.payload === "object" ? item.payload : {};
 
-			if (!to || !to.includes("@")) {
-				dispatchResults.push({
-					id: queueId,
-					to,
-					status: "failed",
-					error: "Valid recipient email is required",
-				});
-				continue;
+		// Batch emails to avoid Google's "Too many login attempts" rate limit.
+		// Send in batches of 5 with a 3-second pause between batches.
+		const BATCH_SIZE = 5;
+		const BATCH_DELAY_MS = 3000;
+
+		for (let batchStart = 0; batchStart < items.length; batchStart += BATCH_SIZE) {
+			const batch = items.slice(batchStart, batchStart + BATCH_SIZE);
+
+			// Add delay between batches (skip for the first batch)
+			if (batchStart > 0) {
+				await delay(BATCH_DELAY_MS);
 			}
 
-			const { text, html } = buildCredentialMailContent(payload);
+			// Process each item in the current batch sequentially
+			for (const item of batch) {
+				const queueId = normalize(item?.id) || `queue-${Date.now()}`;
+				const to = normalize(item?.to);
+				const subject = normalize(item?.subject) || "GBU Faculty Portal Credentials";
+				const payload = item?.payload && typeof item.payload === "object" ? item.payload : {};
 
-			try {
-				const result = await sendMail({ to, subject, text, html });
-				dispatchResults.push({
-					id: queueId,
-					to,
-					status: result?.queued ? "sent" : "not-configured",
-					messageId: result?.messageId || "",
-				});
-			} catch (error) {
-				dispatchResults.push({
-					id: queueId,
-					to,
-					status: "failed",
-					error: error.message || "Email send failed",
-				});
+				if (!to || !to.includes("@")) {
+					dispatchResults.push({
+						id: queueId,
+						to,
+						status: "failed",
+						error: "Valid recipient email is required",
+					});
+					continue;
+				}
+
+				const { text, html } = buildCredentialMailContent(payload);
+
+				try {
+					const result = await sendMail({ to, subject, text, html });
+					dispatchResults.push({
+						id: queueId,
+						to,
+						status: result?.queued ? "sent" : "not-configured",
+						messageId: result?.messageId || "",
+					});
+				} catch (error) {
+					dispatchResults.push({
+						id: queueId,
+						to,
+						status: "failed",
+						error: error.message || "Email send failed",
+					});
+				}
+
+				// Small delay between individual emails within a batch
+				await delay(500);
 			}
 		}
 
