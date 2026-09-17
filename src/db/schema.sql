@@ -645,4 +645,21 @@ END $$;
       SELECT COUNT(*) AS password_reset_otps_count
       FROM password_reset_otps;
 
+      -- =====================================
+      -- UNIQUE VISITORS TABLE
+      -- =====================================
+      CREATE TABLE IF NOT EXISTS unique_visitors (
+        id SERIAL PRIMARY KEY,
+        visitor_hash VARCHAR(64) NOT NULL UNIQUE,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        first_visit TIMESTAMPTZ DEFAULT NOW(),
+        last_visit TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_visitors_hash ON unique_visitors(visitor_hash);
+
+      SELECT COUNT(*) AS unique_visitors_count
+      FROM unique_visitors;
+
       COMMIT;
