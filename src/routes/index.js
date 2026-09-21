@@ -19,6 +19,7 @@ const tickerNoticesRoutes = require("../modules/tickerNotices");
 const uploadRoutes = require("../modules/uploads");
 const visitorsRoutes = require("../modules/visitors");
 const backupRoutes = require("../modules/backup");
+const analyticsRoutes = require("../modules/analytics");
 const router = express.Router();
 const v1Router = express.Router();
 
@@ -54,5 +55,6 @@ v1Router.use("/", tickerNoticesRoutes);
 v1Router.use("/", uploadRoutes);
 v1Router.use("/", visitorsRoutes);
 v1Router.use("/", backupRoutes);
+v1Router.use("/", analyticsRoutes);
 router.use("/v1", v1Router);
 module.exports = router;
