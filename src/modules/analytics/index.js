@@ -70,6 +70,54 @@ const simpleHash = (str) => {
   return hash.toString(16).padStart(8, "0");
 };
 
+/* ─── Date range helper ─── */
+/**
+ * Parse `from`, `to`, `days` query params into a WHERE clause + params array.
+ * Priority: from/to > days > default 30
+ * Returns { clause, params, startIndex } where clause is like "visited_at >= $1 AND visited_at < $2"
+ */
+function parseDateRange(reqQuery, startParamIndex = 1) {
+  const { from, to, days } = reqQuery;
+  let idx = startParamIndex;
+
+  if (from && to) {
+    // Custom date range: from (inclusive) to to+1day (exclusive, so the "to" date is fully included)
+    return {
+      clause: `visited_at >= $${idx}::date AND visited_at < ($${idx + 1}::date + INTERVAL '1 day')`,
+      params: [from, to],
+      nextIndex: idx + 2,
+    };
+  }
+  if (from) {
+    // From a date until now
+    return {
+      clause: `visited_at >= $${idx}::date`,
+      params: [from],
+      nextIndex: idx + 1,
+    };
+  }
+  if (to) {
+    // Everything up to a date
+    return {
+      clause: `visited_at < ($${idx}::date + INTERVAL '1 day')`,
+      params: [to],
+      nextIndex: idx + 1,
+    };
+  }
+  // Fallback: days-based (default 30, max 365, 0 = all time)
+  const d = Number(days);
+  if (d === 0) {
+    // All time — no date filter
+    return { clause: "TRUE", params: [], nextIndex: idx };
+  }
+  const numDays = Math.min(d || 30, 730);
+  return {
+    clause: `visited_at >= CURRENT_DATE - $${idx} * INTERVAL '1 day'`,
+    params: [numDays],
+    nextIndex: idx + 1,
+  };
+}
+
 /* ─── POST /analytics/track (Public) ─── */
 router.post("/analytics/track", async (req, res) => {
   try {
@@ -160,7 +208,7 @@ router.get(
   },
 );
 
-/* ─── GET /analytics/timeline?days=30 (Admin only) ─── */
+/* ─── GET /analytics/timeline?from=&to=&days=30 (Admin only) ─── */
 router.get(
   "/analytics/timeline",
   authenticate,
@@ -168,7 +216,7 @@ router.get(
   async (req, res) => {
     try {
       await ensureAnalyticsSchema();
-      const days = Math.min(Number(req.query.days) || 30, 365);
+      const { clause, params } = parseDateRange(req.query);
 
       const result = await query(
         `SELECT
@@ -176,13 +224,13 @@ router.get(
            COUNT(*) AS page_views,
            COUNT(DISTINCT visitor_hash) AS unique_visitors
          FROM page_visits
-         WHERE visited_at >= CURRENT_DATE - $1 * INTERVAL '1 day'
+         WHERE ${clause}
          GROUP BY visited_at::date
          ORDER BY date ASC`,
-        [days],
+        params,
       );
 
-      return successResponse(res, "Visitor timeline", { days, data: result.rows });
+      return successResponse(res, "Visitor timeline", { data: result.rows });
     } catch (error) {
       return errorResponse(res, "Failed to fetch timeline", [{ field: "timeline", message: error.message }], 500);
     }
@@ -197,15 +245,15 @@ router.get(
   async (req, res) => {
     try {
       await ensureAnalyticsSchema();
-      const days = Math.min(Number(req.query.days) || 30, 365);
+      const { clause, params } = parseDateRange(req.query);
 
       const result = await query(
         `SELECT device_type AS name, COUNT(*) AS value
          FROM page_visits
-         WHERE visited_at >= CURRENT_DATE - $1 * INTERVAL '1 day'
+         WHERE ${clause}
          GROUP BY device_type
          ORDER BY value DESC`,
-        [days],
+        params,
       );
 
       return successResponse(res, "Device breakdown", { data: result.rows });
@@ -223,15 +271,15 @@ router.get(
   async (req, res) => {
     try {
       await ensureAnalyticsSchema();
-      const days = Math.min(Number(req.query.days) || 30, 365);
+      const { clause, params } = parseDateRange(req.query);
 
       const result = await query(
         `SELECT browser AS name, COUNT(*) AS value
          FROM page_visits
-         WHERE visited_at >= CURRENT_DATE - $1 * INTERVAL '1 day'
+         WHERE ${clause}
          GROUP BY browser
          ORDER BY value DESC`,
-        [days],
+        params,
       );
 
       return successResponse(res, "Browser breakdown", { data: result.rows });
@@ -249,15 +297,15 @@ router.get(
   async (req, res) => {
     try {
       await ensureAnalyticsSchema();
-      const days = Math.min(Number(req.query.days) || 30, 365);
+      const { clause, params } = parseDateRange(req.query);
 
       const result = await query(
         `SELECT os AS name, COUNT(*) AS value
          FROM page_visits
-         WHERE visited_at >= CURRENT_DATE - $1 * INTERVAL '1 day'
+         WHERE ${clause}
          GROUP BY os
          ORDER BY value DESC`,
-        [days],
+        params,
       );
 
       return successResponse(res, "OS breakdown", { data: result.rows });
@@ -267,7 +315,7 @@ router.get(
   },
 );
 
-/* ─── GET /analytics/pages?limit=20 (Admin only) ─── */
+/* ─── GET /analytics/pages?limit=20&offset=0&search= (Admin only) ─── */
 router.get(
   "/analytics/pages",
   authenticate,
@@ -275,23 +323,46 @@ router.get(
   async (req, res) => {
     try {
       await ensureAnalyticsSchema();
-      const limit = Math.min(Number(req.query.limit) || 20, 100);
-      const days = Math.min(Number(req.query.days) || 30, 365);
+      const limit = Math.min(Number(req.query.limit) || 20, 200);
+      const offset = Math.max(Number(req.query.offset) || 0, 0);
+      const search = (req.query.search || "").trim();
+      const { clause, params, nextIndex } = parseDateRange(req.query);
 
+      // Build search condition
+      let searchClause = "";
+      const allParams = [...params];
+      let pIdx = nextIndex;
+      if (search) {
+        searchClause = ` AND page_path ILIKE $${pIdx}`;
+        allParams.push(`%${search}%`);
+        pIdx++;
+      }
+
+      // Get total count
+      const countResult = await query(
+        `SELECT COUNT(DISTINCT page_path) AS total
+         FROM page_visits
+         WHERE ${clause}${searchClause}`,
+        allParams,
+      );
+      const total = Number(countResult.rows[0]?.total || 0);
+
+      // Get paginated results
+      const dataParams = [...allParams, limit, offset];
       const result = await query(
         `SELECT
            page_path AS path,
            COUNT(*) AS views,
            COUNT(DISTINCT visitor_hash) AS unique_visitors
          FROM page_visits
-         WHERE visited_at >= CURRENT_DATE - $1 * INTERVAL '1 day'
+         WHERE ${clause}${searchClause}
          GROUP BY page_path
          ORDER BY views DESC
-         LIMIT $2`,
-        [days, limit],
+         LIMIT $${pIdx} OFFSET $${pIdx + 1}`,
+        dataParams,
       );
 
-      return successResponse(res, "Top pages", { data: result.rows });
+      return successResponse(res, "Top pages", { data: result.rows, total, limit, offset });
     } catch (error) {
       return errorResponse(res, "Failed to fetch pages", [{ field: "pages", message: error.message }], 500);
     }
