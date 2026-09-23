@@ -3,6 +3,7 @@ const helmet = require("helmet");
 const cors = require("cors");
 const compression = require("compression");
 const { randomUUID } = require("crypto");
+const path = require("path");
 const env = require("./config/env");
 const apiRoutes = require("./routes");
 const recruitmentsRoutes = require("./modules/recruitments");
@@ -16,6 +17,20 @@ const app = express();
 // the 100kb express default and used to fail the save with a bare 413.
 app.use(express.json({ limit: env.jsonBodyLimit }));
 app.disable("x-powered-by");
+
+// Serve uploaded files BEFORE helmet — uploaded assets are public and don't need
+// security headers. Helmet's Cross-Origin-Resource-Policy: same-origin would
+// block cross-origin image loading (frontend and backend on different ports).
+app.use(
+  env.uploadBaseUrl,
+  express.static(path.resolve(env.uploadStoragePath), {
+    maxAge: "365d",
+    immutable: true,
+    etag: true,
+    lastModified: true,
+  })
+);
+
 app.use(helmet());
 app.use(
   cors({

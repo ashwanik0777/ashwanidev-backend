@@ -34,10 +34,21 @@ const env = {
   authRateLimitWindowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX) || 20,
   
-  // Cloudinary Config
+  // Cloudinary Config (legacy — kept for backward compatibility)
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || "",
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || "",
+
+  // Local File Storage
+  uploadStoragePath: process.env.UPLOAD_STORAGE_PATH || "./storage/uploads",
+  uploadBaseUrl: process.env.UPLOAD_BASE_URL || "/uploads",
+  uploadPublicUrl: process.env.UPLOAD_PUBLIC_URL || "",  // full public URL prefix e.g. http://localhost:3000/uploads
+  uploadMaxImageSize: Number(process.env.UPLOAD_MAX_IMAGE_SIZE) || 10 * 1024 * 1024,
+  uploadMaxFileSize: Number(process.env.UPLOAD_MAX_FILE_SIZE) || 20 * 1024 * 1024,
+  uploadImageMaxWidth: Number(process.env.UPLOAD_IMAGE_MAX_WIDTH) || 2400,
+  uploadImageMaxHeight: Number(process.env.UPLOAD_IMAGE_MAX_HEIGHT) || 2400,
+  uploadImageQuality: Number(process.env.UPLOAD_IMAGE_QUALITY) || 82,
+  uploadKeepOriginals: String(process.env.UPLOAD_KEEP_ORIGINALS || "false") === "true",
 };
 
 module.exports = env;
