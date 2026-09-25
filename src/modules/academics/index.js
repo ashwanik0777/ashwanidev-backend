@@ -51,6 +51,12 @@ const mapSchoolRow = (row) => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   departmentCount: Number(row.department_count || 0),
+  counts: {
+    events: Number(row.events_count || 0),
+    news: Number(row.news_count || 0),
+    notices: Number(row.notices_count || 0),
+    newsletters: Number(row.newsletters_count || 0)
+  }
 });
 
 router.get("/schools", async (req, res) => {
@@ -68,7 +74,11 @@ router.get("/schools", async (req, res) => {
         s.is_active,
         s.created_at,
         s.updated_at,
-        COUNT(d.id) AS department_count
+        COUNT(d.id) AS department_count,
+        (SELECT COUNT(*) FROM events e WHERE e.school_code = s.code) AS events_count,
+        (SELECT COUNT(*) FROM news n WHERE n.school_code = s.code) AS news_count,
+        (SELECT COUNT(*) FROM notices nt WHERE nt.school_code = s.code) AS notices_count,
+        (SELECT COUNT(*) FROM newsletters nl WHERE nl.school_code = s.code) AS newsletters_count
       FROM schools s
       LEFT JOIN departments d ON d.school_id = s.id
       GROUP BY s.id
@@ -112,7 +122,11 @@ router.get("/schools/:id", async (req, res) => {
         s.is_active,
         s.created_at,
         s.updated_at,
-        COUNT(d.id) AS department_count
+        COUNT(d.id) AS department_count,
+        (SELECT COUNT(*) FROM events e WHERE e.school_code = s.code) AS events_count,
+        (SELECT COUNT(*) FROM news n WHERE n.school_code = s.code) AS news_count,
+        (SELECT COUNT(*) FROM notices nt WHERE nt.school_code = s.code) AS notices_count,
+        (SELECT COUNT(*) FROM newsletters nl WHERE nl.school_code = s.code) AS newsletters_count
       FROM schools s
       LEFT JOIN departments d ON d.school_id = s.id
       WHERE s.id = $1
@@ -189,7 +203,11 @@ router.get("/schools/code/:code", async (req, res) => {
       SELECT
         s.id, s.code, s.name, s.slug, s.overview, s.content, s.is_active,
         s.created_at, s.updated_at,
-        COUNT(d.id) AS department_count
+        COUNT(d.id) AS department_count,
+        (SELECT COUNT(*) FROM events e WHERE e.school_code = s.code) AS events_count,
+        (SELECT COUNT(*) FROM news n WHERE n.school_code = s.code) AS news_count,
+        (SELECT COUNT(*) FROM notices nt WHERE nt.school_code = s.code) AS notices_count,
+        (SELECT COUNT(*) FROM newsletters nl WHERE nl.school_code = s.code) AS newsletters_count
       FROM schools s
       LEFT JOIN departments d ON d.school_id = s.id
       WHERE LOWER(s.code) = LOWER($1)

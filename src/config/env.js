@@ -49,6 +49,12 @@ const env = {
   uploadImageMaxHeight: Number(process.env.UPLOAD_IMAGE_MAX_HEIGHT) || 2400,
   uploadImageQuality: Number(process.env.UPLOAD_IMAGE_QUALITY) || 82,
   uploadKeepOriginals: String(process.env.UPLOAD_KEEP_ORIGINALS || "false") === "true",
+
+  // Faculty Profile Completion Portal (temporary — remove after use)
+  facultyPortalEnabled: String(process.env.FACULTY_PORTAL_ENABLED || "false") === "true",
+  facultyPortalExpiresAt: process.env.FACULTY_PORTAL_EXPIRES_AT || "",
+  facultyPortalAccessCode: process.env.FACULTY_PORTAL_ACCESS_CODE || "",
+  facultyPortalUrl: process.env.FACULTY_PORTAL_URL || "http://localhost:5174",
 };
 
 module.exports = env;

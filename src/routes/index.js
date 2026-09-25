@@ -20,6 +20,7 @@ const uploadRoutes = require("../modules/uploads");
 const visitorsRoutes = require("../modules/visitors");
 const backupRoutes = require("../modules/backup");
 const analyticsRoutes = require("../modules/analytics");
+const facultyPortalRoutes = require("../modules/facultyPortal"); // TEMPORARY — remove after faculty profiles collected
 const router = express.Router();
 const v1Router = express.Router();
 
@@ -56,5 +57,6 @@ v1Router.use("/", uploadRoutes);
 v1Router.use("/", visitorsRoutes);
 v1Router.use("/", backupRoutes);
 v1Router.use("/", analyticsRoutes);
+v1Router.use("/", facultyPortalRoutes); // TEMPORARY — remove after faculty profiles collected
 router.use("/v1", v1Router);
 module.exports = router;

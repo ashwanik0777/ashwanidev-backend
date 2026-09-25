@@ -378,10 +378,44 @@ const buildBookingStatusEmail = (userName, booking, status, remarks) => {
   });
 };
 
+const buildApprovalEmail = (recipientName, facultyId, portalUrl, portalName = "Faculty Profile Portal") => {
+  const safeName = normalize(recipientName) || "Faculty Member";
+  const title = `${portalName} — Registration Approved`;
+
+  const contentHtml = `
+    <p>Dear ${safeName},</p>
+    <p>We are pleased to inform you that your faculty registration request has been <strong style="color: #059669;">approved</strong> by the administration.</p>
+    <table class="table-details">
+      <tr>
+        <td class="lbl">Name:</td>
+        <td class="val">${safeName}</td>
+      </tr>
+      <tr>
+        <td class="lbl">Faculty ID:</td>
+        <td class="val">${normalize(facultyId)}</td>
+      </tr>
+    </table>
+    <p>You can now complete your faculty profile by visiting the Faculty Profile Portal. Please use your registered email to log in via OTP.</p>
+    <div style="text-align: center;">
+      <a href="${normalize(portalUrl)}" class="btn" target="_blank">Complete Your Profile</a>
+    </div>
+    <p style="font-size: 12px; color: #78716c; margin-top: 16px;">If you have any questions, please contact the university administration.</p>
+    <p>Regards,<br/><strong>GBU Team</strong></p>
+  `;
+
+  return buildBaseTemplate({
+    title,
+    contentHtml,
+    portalName,
+    isDanger: false
+  });
+};
+
 module.exports = {
   buildOtpEmail,
   buildCredentialsEmail,
   buildRejectionEmail,
+  buildApprovalEmail,
   buildBookingNotificationEmail,
   buildBookingStatusEmail
 };

@@ -8,7 +8,7 @@ const { authenticate, authorize } = require("../../middleware/auth");
 const { ensureAuthBootstrap } = require("../auth/auth.service");
 const ROLES = require("../../constants/roles");
 const { sendMail } = require("../../utils/mailer");
-const { buildOtpEmail, buildCredentialsEmail, buildRejectionEmail } = require("../../utils/mailTemplate");
+const { buildOtpEmail, buildCredentialsEmail, buildRejectionEmail, buildApprovalEmail } = require("../../utils/mailTemplate");
 const env = require("../../config/env");
 const { generateFacultyId } = require("../../utils/facultyIdGenerator");
 
@@ -418,18 +418,18 @@ router.post("/admin/faculty-registration-requests/:id/approve", adminAuth, async
 			[finalUsername, regReq.email.toLowerCase(), regReq.name, ROLES.FACULTY, passwordHash, facultyId, regReq.school_code]
 		);
 
-		// Send credentials email
-		const loginUrl = `${env.appBaseUrl || "https://gbu.ac.in"}/login`;
-		const credentialHtml = buildCredentialsEmail(regReq.name, regReq.email, plainPassword, loginUrl, facultyId);
+		// Send approval notification email with portal link
+		const portalUrl = env.facultyPortalUrl || "http://localhost:5174";
+		const approvalHtml = buildApprovalEmail(regReq.name, facultyId, portalUrl);
 		try {
 			await sendMail({
 				to: regReq.email,
-				subject: "GBU Faculty Portal - Your Login Credentials",
-				text: `Dear ${regReq.name}, Your registration has been approved. Login ID: ${regReq.email}, Temporary Password: ${plainPassword}. Please login at ${loginUrl} and change your password.`,
-				html: credentialHtml,
+				subject: "GBU Faculty Portal — Your Registration Has Been Approved",
+				text: `Dear ${regReq.name}, Your registration has been approved! Faculty ID: ${facultyId}. Please complete your profile at ${portalUrl}`,
+				html: approvalHtml,
 			});
 		} catch (mailErr) {
-			console.error("[FacultyRegistration] Failed to send credentials email:", mailErr.message);
+			console.error("[FacultyRegistration] Failed to send approval email:", mailErr.message);
 		}
 
 		return successResponse(res, "Registration request approved and faculty account created", {
