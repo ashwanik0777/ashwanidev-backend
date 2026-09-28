@@ -386,9 +386,9 @@ router.post("/admin/faculty-registration-requests/:id/approve", adminAuth, async
 			[
 				facultyId,
 				regReq.name,
-				regReq.designation,
+				regReq.designation || '',
 				regReq.department,
-				regReq.school_code,
+				regReq.school_name || regReq.school_code,
 				regReq.school_code,
 				regReq.email.toLowerCase(),
 				regReq.mobile,
