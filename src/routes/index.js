@@ -18,6 +18,7 @@ const universityStatsRoutes = require("../modules/universityStats");
 const tickerNoticesRoutes = require("../modules/tickerNotices");
 const uploadRoutes = require("../modules/uploads");
 const visitorsRoutes = require("../modules/visitors");
+const subscribersRoutes = require("../modules/subscribers");
 const backupRoutes = require("../modules/backup");
 const analyticsRoutes = require("../modules/analytics");
 const facultyPortalRoutes = require("../modules/facultyPortal"); // TEMPORARY — remove after faculty profiles collected
@@ -55,6 +56,7 @@ v1Router.use("/", universityStatsRoutes);
 v1Router.use("/", tickerNoticesRoutes);
 v1Router.use("/", uploadRoutes);
 v1Router.use("/", visitorsRoutes);
+v1Router.use("/", subscribersRoutes);
 v1Router.use("/", backupRoutes);
 v1Router.use("/", analyticsRoutes);
 v1Router.use("/", facultyPortalRoutes); // TEMPORARY — remove after faculty profiles collected

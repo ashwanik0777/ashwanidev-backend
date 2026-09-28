@@ -411,12 +411,37 @@ const buildApprovalEmail = (recipientName, facultyId, portalUrl, portalName = "F
   });
 };
 
+const buildNewsletterSubscriptionEmail = (email) => {
+  const title = "Welcome to GBU Newsletter";
+
+  const contentHtml = `
+    <p>Dear Subscriber,</p>
+    <p>Thank you for subscribing to the <strong>Gautam Buddha University</strong> Newsletter!</p>
+    <p>We are delighted to have you with us. From now on, you will receive our latest news, event updates, and important announcements directly in your inbox.</p>
+    <div style="margin-top: 20px; padding: 12px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+      <p style="margin: 0; font-size: 13px; color: #475569;">
+        <strong>What's Next?</strong><br/>
+        Stay tuned! We'll be sending you exciting updates very soon. If you ever need help or have questions, feel free to contact us.
+      </p>
+    </div>
+    <p>Regards,<br/><strong>GBU Communications Team</strong></p>
+  `;
+
+  return buildBaseTemplate({
+    title,
+    contentHtml,
+    portalName: "GBU Newsletter",
+    isDanger: false
+  });
+};
+
 module.exports = {
   buildOtpEmail,
   buildCredentialsEmail,
   buildRejectionEmail,
   buildApprovalEmail,
   buildBookingNotificationEmail,
-  buildBookingStatusEmail
+  buildBookingStatusEmail,
+  buildNewsletterSubscriptionEmail
 };
 
