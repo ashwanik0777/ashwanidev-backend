@@ -40,14 +40,15 @@ const getTransporter = () => {
 };
 
 const getLogoPath = () => {
-  // Try dynamic relative path from mailer.js
-  const relPath = path.join(__dirname, "../../../gbu-website/public/assets/logo1.png");
-  if (fs.existsSync(relPath)) return relPath;
-
-  // Try user's exact absolute path
-  const absPath = "/Users/ashwanikushwaha/gbu-full-web/gbu-website/public/assets/logo1.png";
-  if (fs.existsSync(absPath)) return absPath;
-
+  // Prefer the optimised webp (≈5 KB) over the full-size PNG (≈110 KB)
+  const candidates = [
+    path.join(__dirname, "../assets/logo_email.webp"),           // backend's own copy (works on production)
+    path.join(__dirname, "../../../gbu-website/public/assets/logo_email.webp"),  // local dev
+    path.join(__dirname, "../../../gbu-website/public/assets/logo1.png"),        // fallback PNG
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
   return null;
 };
 
@@ -79,11 +80,13 @@ const sendMail = async ({ to, subject, text, html }, retries = 2) => {
   if (html && html.includes("cid:gbulogo")) {
     const logoPath = getLogoPath();
     if (logoPath) {
+      const isWebp = logoPath.endsWith(".webp");
       mailOptions.attachments = [
         {
-          filename: 'logo1.png',
+          filename: isWebp ? "logo.webp" : "logo.png",
           path: logoPath,
-          cid: 'gbulogo'
+          cid: "gbulogo",
+          contentType: isWebp ? "image/webp" : "image/png",
         }
       ];
     }
