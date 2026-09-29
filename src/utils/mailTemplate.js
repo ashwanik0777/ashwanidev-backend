@@ -175,7 +175,7 @@ const buildOtpEmail = (recipientName, otpCode, expiresMinutes, purposeText, port
     <p>Your verification OTP code is:</p>
     <div class="otp-display">${otpCode}</div>
     <p>This code is valid for <strong>${expiresMinutes || 10} minutes</strong>. Please do not share it with anyone.</p>
-    <p>Regards,<br/><strong>GBU Team</strong></p>
+    <p>Regards,<br/><strong>GBU IT Cell</strong></p>
   `;
 
   return buildBaseTemplate({
@@ -215,7 +215,7 @@ const buildCredentialsEmail = (recipientName, username, password, loginUrl, link
     <div style="text-align: center;">
       <a href="${loginUrl}" class="btn" target="_blank">Access Portal</a>
     </div>
-    <p>Regards,<br/><strong>GBU Team</strong></p>
+    <p>Regards,<br/><strong>GBU IT Cell</strong></p>
   `;
 
   return buildBaseTemplate({
@@ -239,7 +239,7 @@ const buildRejectionEmail = (recipientName, reason, portalName = "Faculty Portal
       <div style="font-weight: 700; margin-bottom: 2px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px;">Rejection Reason</div>
       ${normalize(reason)}
     </div>` : ""}
-    <p>Regards,<br/><strong>GBU Team</strong></p>
+    <p>Regards,<br/><strong>GBU IT Cell</strong></p>
   `;
 
   return buildBaseTemplate({
@@ -400,7 +400,7 @@ const buildApprovalEmail = (recipientName, facultyId, portalUrl, portalName = "F
       <a href="${normalize(portalUrl)}" class="btn" target="_blank">Complete Your Profile</a>
     </div>
     <p style="font-size: 12px; color: #78716c; margin-top: 16px;">If you have any questions, please contact the university administration.</p>
-    <p>Regards,<br/><strong>GBU Team</strong></p>
+    <p>Regards,<br/><strong>GBU IT Cell</strong></p>
   `;
 
   return buildBaseTemplate({
