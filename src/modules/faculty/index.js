@@ -97,6 +97,7 @@ const mapFacultyFull = (row) => ({
 	cv: row.cv_link || "",
 	googleScholar: row.google_scholar || "",
 	orcid: row.orcid || "",
+	linkedin: row.linkedin || "",
 	tags: safeJsonParse(row.tags, []),
 	researchAreas: safeJsonParse(row.research_areas, []),
 	tabData: safeJsonParse(row.tab_data, {}),
@@ -140,6 +141,7 @@ const ensureFacultyInfrastructure = async () => {
 		"cv_link TEXT NOT NULL DEFAULT ''",
 		"google_scholar TEXT NOT NULL DEFAULT ''",
 		"orcid TEXT NOT NULL DEFAULT ''",
+		"linkedin TEXT NOT NULL DEFAULT ''",
 		"tags JSONB NOT NULL DEFAULT '[]'::jsonb",
 		"research_areas JSONB NOT NULL DEFAULT '[]'::jsonb",
 		"tab_data JSONB NOT NULL DEFAULT '{}'::jsonb",
@@ -167,7 +169,7 @@ const ensureFacultyContext = async () => {
 
 const FULL_SELECT = `id, name, designation, department, school, email, phone, is_active,
 	specialization, experience_years, publications_count, education, short_bio, full_bio,
-	office, image_url, faculty_url, cv_link, google_scholar, orcid,
+	office, image_url, faculty_url, cv_link, google_scholar, orcid, linkedin,
 	tags, research_areas, tab_data, created_at, updated_at`;
 
 /* ═══════════════════════════════════════════════════════════════
@@ -276,9 +278,9 @@ router.put("/faculty/me/profile", authenticate, authorize(ROLES.FACULTY), async 
 				designation = $3, specialization = $4, experience_years = $5,
 				publications_count = $6, education = $7, short_bio = $8, full_bio = $9,
 				office = $10, image_url = $11, faculty_url = $12, cv_link = $13,
-				google_scholar = $14, orcid = $15, phone = $16,
-				tags = $17::jsonb, research_areas = $18::jsonb, tab_data = $19::jsonb,
-				updated_by = $20, updated_at = NOW()
+				google_scholar = $14, orcid = $15, linkedin = $16, phone = $17,
+				tags = $18::jsonb, research_areas = $19::jsonb, tab_data = $20::jsonb,
+				updated_by = $21, updated_at = NOW()
 			WHERE id = $1
 			RETURNING ${FULL_SELECT}`,
 			[
@@ -297,6 +299,7 @@ router.put("/faculty/me/profile", authenticate, authorize(ROLES.FACULTY), async 
 				normalize(b.cv),
 				normalize(b.googleScholar),
 				normalize(b.orcid),
+				normalize(b.linkedin),
 				normalize(b.phone),
 				JSON.stringify(Array.isArray(b.tags) ? b.tags : []),
 				JSON.stringify(Array.isArray(b.researchAreas) ? b.researchAreas.filter(a => (a.title && a.title.trim()) || (a.description && a.description.trim())) : []),
@@ -572,8 +575,8 @@ router.put("/admin/faculty/:id", adminAuth, async (req, res) => {
 				name=$2, designation=$3, department=$4, school=$5, school_code=$6, email=$7, phone=$8, is_active=$9,
 				specialization=$10, experience_years=$11, publications_count=$12, education=$13,
 				short_bio=$14, full_bio=$15, office=$16, image_url=$17, faculty_url=$18, cv_link=$19,
-				google_scholar=$20, orcid=$21, tags=$22::jsonb, research_areas=$23::jsonb, tab_data=$24::jsonb,
-				updated_by=$25, updated_at=NOW()
+				google_scholar=$20, orcid=$21, linkedin=$22, tags=$23::jsonb, research_areas=$24::jsonb, tab_data=$25::jsonb,
+				updated_by=$26, updated_at=NOW()
 			WHERE id=$1 RETURNING ${FULL_SELECT}`,
 			[
 				id,
@@ -597,6 +600,7 @@ router.put("/admin/faculty/:id", adminAuth, async (req, res) => {
 				normalize(pick(b.cv, existing.cv_link)),
 				normalize(pick(b.googleScholar, existing.google_scholar)),
 				normalize(pick(b.orcid, existing.orcid)),
+				normalize(pick(b.linkedin, existing.linkedin)),
 				JSON.stringify(b.tags !== undefined ? (Array.isArray(b.tags) ? b.tags : []) : safeJsonParse(existing.tags, [])),
 				JSON.stringify(b.researchAreas !== undefined ? (Array.isArray(b.researchAreas) ? b.researchAreas.filter(a => (a.title && a.title.trim()) || (a.description && a.description.trim())) : []) : safeJsonParse(existing.research_areas, [])),
 				JSON.stringify(b.tabData !== undefined ? sanitizeTabData(b.tabData && typeof b.tabData === "object" ? b.tabData : {}) : safeJsonParse(existing.tab_data, {})),

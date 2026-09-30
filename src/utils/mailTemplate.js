@@ -35,11 +35,11 @@ const buildBaseTemplate = ({ title, contentHtml, portalName = "Faculty Portal", 
       margin-bottom: 20px;
     }
     .logo-img {
-      width: 52px;
-      height: 52px;
+      height: 60px;
+      width: auto;
       display: block;
       margin: 0 auto 12px auto;
-      object-fit: contain;
+      border: 0;
     }
     .portal-tag {
       font-size: 10px;
