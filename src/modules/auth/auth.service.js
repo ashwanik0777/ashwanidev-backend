@@ -355,7 +355,7 @@ const verifyLoginOtp = async (email, otp, newPassword, requestMeta = {}) => {
   if (hashOtp(otp) !== activeOtp.otp_hash) {
     const nextAttempts = Number(activeOtp.attempts || 0) + 1;
     await query(
-      `UPDATE password_reset_otps SET attempts = $2, consumed_at = CASE WHEN $2 >= $3 THEN NOW() ELSE consumed_at END WHERE id = $1`,
+      `UPDATE password_reset_otps SET attempts = $2::int, consumed_at = CASE WHEN $2::int >= $3::int THEN NOW() ELSE consumed_at END WHERE id = $1`,
       [activeOtp.id, nextAttempts, env.otpMaxAttempts]
     );
     return { success: false, message: "Invalid OTP" };
@@ -571,8 +571,8 @@ const verifyOtpAndResetPassword = async ({ email, otp, newPassword }) => {
     await query(
       `
       UPDATE password_reset_otps
-      SET attempts = $2,
-          consumed_at = CASE WHEN $2 >= $3 THEN NOW() ELSE consumed_at END
+      SET attempts = $2::int,
+          consumed_at = CASE WHEN $2::int >= $3::int THEN NOW() ELSE consumed_at END
       WHERE id = $1
       `,
       [activeOtp.id, nextAttempts, env.otpMaxAttempts],

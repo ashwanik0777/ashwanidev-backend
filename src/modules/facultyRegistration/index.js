@@ -169,7 +169,7 @@ router.post("/faculty-registration/verify-otp", async (req, res) => {
 		if (hashOtp(otp) !== activeOtp.otp_hash) {
 			const nextAttempts = Number(activeOtp.attempts || 0) + 1;
 			await query(
-				`UPDATE registration_otps SET attempts = $2, consumed_at = CASE WHEN $2 >= $3 THEN NOW() ELSE consumed_at END WHERE id = $1`,
+				`UPDATE registration_otps SET attempts = $2::int, consumed_at = CASE WHEN $2::int >= $3::int THEN NOW() ELSE consumed_at END WHERE id = $1`,
 				[activeOtp.id, nextAttempts, env.otpMaxAttempts]
 			);
 			return errorResponse(res, "Invalid OTP", [{ field: "otp", message: "The OTP you entered is incorrect" }], 400);
