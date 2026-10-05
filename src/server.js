@@ -7,6 +7,7 @@ const { ensureAnnouncementsSchema } = require("./modules/announcements/store");
 const { migrateSchoolAnnouncements } = require("./modules/announcements/migrate");
 const storage = require("./services/storage");
 const { query } = require("./config/db");
+const { ensureGrievanceSchema } = require("./modules/grievance");
 
 const UPLOADS_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS uploads (
@@ -43,6 +44,9 @@ const startServer = async () => {
 
     // Ensure uploads metadata table exists
     try { await query(UPLOADS_TABLE_SQL); } catch (e) { console.error("uploads table migration:", e.message); }
+
+    // Initialize Grievance module schema (tables, indexes, default settings)
+    try { await ensureGrievanceSchema(); } catch (e) { console.error("grievance schema migration:", e.message); }
 
     app.listen(env.port, env.host, () => {
       logInfo("GBU backend server running", {

@@ -90,6 +90,8 @@ const signAccessToken = (user) => {
       role: user.role,
       name: user.name,
       schoolCode: user.linked_school_code,
+      departmentName: user.linked_department || '',
+      grievanceRole: user.grievance_role || null,
     },
     env.jwtAccessSecret,
     { expiresIn: env.jwtAccessExpiresIn },
@@ -150,6 +152,7 @@ const ensureAuthBootstrap = async () => {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS linked_department VARCHAR(120) NOT NULL DEFAULT '';`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS linked_school_code VARCHAR(50) NOT NULL DEFAULT '';`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS force_password_reset BOOLEAN NOT NULL DEFAULT FALSE;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS grievance_role VARCHAR(20) DEFAULT NULL;`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
@@ -250,7 +253,7 @@ const login = async (email, password, portalRole, requestMeta = {}) => {
 
   const userResult = await query(
     `
-    SELECT id, name, email, username, role, password_hash, is_active, force_password_reset, linked_school_code
+    SELECT id, name, email, username, role, password_hash, is_active, force_password_reset, linked_school_code, linked_department, grievance_role
     FROM users
     WHERE LOWER(email) = $1 OR LOWER(COALESCE(username, '')) = $1
     LIMIT 1
@@ -328,7 +331,7 @@ const verifyLoginOtp = async (email, otp, newPassword, requestMeta = {}) => {
 
   const userResult = await query(
     `
-    SELECT id, name, email, username, role, password_hash, is_active, force_password_reset, linked_school_code
+    SELECT id, name, email, username, role, password_hash, is_active, force_password_reset, linked_school_code, linked_department, grievance_role
     FROM users
     WHERE LOWER(email) = $1
     LIMIT 1
@@ -424,7 +427,7 @@ const refresh = async (token) => {
 
     const userResult = await query(
       `
-      SELECT id, name, email, role, is_active, linked_school_code
+      SELECT id, name, email, role, is_active, linked_school_code, linked_department, grievance_role
       FROM users
       WHERE id = $1
       LIMIT 1
@@ -474,7 +477,7 @@ const requestPasswordResetOtp = async (email) => {
 
   const userResult = await query(
     `
-    SELECT id, name, email, role, is_active
+    SELECT id, name, email, role, is_active, linked_school_code, linked_department, grievance_role
     FROM users
     WHERE LOWER(email) = $1
     LIMIT 1
