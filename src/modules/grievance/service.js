@@ -65,7 +65,16 @@ async function submitGrievance(user, body, file) {
         
         const fileName = `${ticketId}-${Date.now()}${path.extname(file.originalname)}`;
         const dest = path.join(uploadDir, fileName);
-        fs.renameSync(file.path, dest);
+        try {
+            fs.renameSync(file.path, dest);
+        } catch (err) {
+            if (err.code === 'EXDEV') {
+                fs.copyFileSync(file.path, dest);
+                fs.unlinkSync(file.path);
+            } else {
+                throw err;
+            }
+        }
         attachmentUrl = `/uploads/grievances/${fileName}`;
     }
 
@@ -75,13 +84,13 @@ async function submitGrievance(user, body, file) {
         submitter_id: String(user.sub),
         submitter_name: user.name,
         submitter_email: user.email,
-        submitter_contact: body.submitter_contact,
-        hostel_or_designation: body.hostel_or_designation,
-        complaint_for: body.complaint_for,
-        school_name: user.schoolName || body.school_name,
-        school_code: user.schoolCode || body.school_code,
-        department_name: user.departmentName || body.department_name,
-        programme_name: user.programmeName || body.programme_name,
+        submitter_contact: body.submitter_contact || null,
+        hostel_or_designation: body.hostel_or_designation || null,
+        complaint_for: body.complaint_for || null,
+        school_name: user.schoolName || body.school_name || null,
+        school_code: user.schoolCode || body.school_code || null,
+        department_name: user.departmentName || body.department_name || null,
+        programme_name: user.programmeName || body.programme_name || null,
         category: body.category,
         sub_category: body.sub_category,
         priority: body.priority || 'Medium',
