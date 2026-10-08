@@ -62,8 +62,8 @@ async function getModuleStatus(req, res) {
 
 async function getManagedGrievances(req, res) {
     try {
-        const { page = 1, limit = 10, status, category, search, submitterType } = req.query;
-        const result = await service.getGrievancesForManagement(req.user, { page, limit, status, category, search, submitterType });
+        const { page = 1, limit = 10, status, category, search, submitterType, school } = req.query;
+        const result = await service.getGrievancesForManagement(req.user, { page, limit, status, category, search, submitterType, school });
         return successResponse(res, 'Managed grievances retrieved', result.data, 200, {
             total: result.total,
             page: parseInt(page),
