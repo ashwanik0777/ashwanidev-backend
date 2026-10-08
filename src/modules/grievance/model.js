@@ -59,6 +59,11 @@ async function getAllGrievances(filters, scope) {
         whereClause += ` AND submitter_type = $${paramIndex++}`;
         params.push(filters.submitterType.toLowerCase());
     }
+    if (filters.school && filters.school !== 'All Schools' && filters.school !== 'All') {
+        whereClause += ` AND (school_name = $${paramIndex} OR school_code = $${paramIndex})`;
+        params.push(filters.school);
+        paramIndex++;
+    }
     if (filters.search) {
         whereClause += ` AND (ticket_id ILIKE $${paramIndex} OR submitter_name ILIKE $${paramIndex} OR subject ILIKE $${paramIndex})`;
         params.push(`%${filters.search}%`);
@@ -98,10 +103,12 @@ async function getGrievanceStats(scope) {
 async function updateGrievanceStatus(ticketId, status, adminRemark, assignedTo) {
     let text = `
         UPDATE grievances 
-        SET status = $1, admin_remark = $2, assigned_to = $3, updated_at = NOW()
+        SET status = $1, admin_remark = $2, assigned_to = $3
     `;
-    if (status === 'Resolved') {
+    if (status === 'Resolved' || status === 'Rejected') {
         text += `, resolved_at = NOW()`;
+    } else {
+        text += `, updated_at = NOW()`;
     }
     text += ` WHERE ticket_id = $4 RETURNING *;`;
     
