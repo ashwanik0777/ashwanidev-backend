@@ -61,6 +61,6 @@ v1Router.use("/", subscribersRoutes);
 v1Router.use("/", backupRoutes);
 v1Router.use("/", analyticsRoutes);
 v1Router.use("/", facultyPortalRoutes); // TEMPORARY — remove after faculty profiles collected
-v1Router.use("/grievances", grievanceRoutes);
+v1Router.use("/grievances/maintenance", grievanceRoutes);
 router.use("/v1", v1Router);
 module.exports = router;

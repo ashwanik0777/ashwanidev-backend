@@ -49,6 +49,10 @@ const env = {
   uploadImageMaxHeight: Number(process.env.UPLOAD_IMAGE_MAX_HEIGHT) || 2400,
   uploadImageQuality: Number(process.env.UPLOAD_IMAGE_QUALITY) || 82,
   uploadKeepOriginals: String(process.env.UPLOAD_KEEP_ORIGINALS || "false") === "true",
+  // Files that must only be served through an authorised endpoint (grievance attachments).
+  privateStoragePath: process.env.PRIVATE_STORAGE_PATH || "./storage/private",
+  // How often the grievance SLA job checks for missed site visits and overdue work.
+  grievanceSlaIntervalMs: Number(process.env.GRIEVANCE_SLA_INTERVAL_MS) || 10 * 60 * 1000,
 
   // Faculty Profile Completion Portal (temporary — remove after use)
   facultyPortalEnabled: String(process.env.FACULTY_PORTAL_ENABLED || "false") === "true",

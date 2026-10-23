@@ -5,6 +5,7 @@ const {
   schoolLoginHandler,
   adminLoginHandler,
   studentLoginHandler,
+  maintenanceLoginHandler,
   refreshHandler,
   logoutHandler,
   meHandler,
@@ -23,6 +24,7 @@ router.post("/login/teacher", authRateLimiter, teacherLoginHandler);
 router.post("/login/school", authRateLimiter, schoolLoginHandler);
 router.post("/login/admin", authRateLimiter, adminLoginHandler);
 router.post("/login/student", authRateLimiter, studentLoginHandler);
+router.post("/login/maintenance", authRateLimiter, maintenanceLoginHandler);
 router.post("/refresh", authRateLimiter, refreshHandler);
 router.post("/logout", authRateLimiter, logoutHandler);
 router.post("/forgot-password/request-otp", authRateLimiter, forgotPasswordRequestHandler);
