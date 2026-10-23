@@ -62,6 +62,7 @@ const facultyLoginHandler = createRoleLoginHandler("faculty", "Faculty");
 const schoolLoginHandler = createRoleLoginHandler("school", "School");
 const adminLoginHandler = createRoleLoginHandler("admin", "Admin");
 const studentLoginHandler = createRoleLoginHandler("student", "Student");
+const maintenanceLoginHandler = createRoleLoginHandler("maintenance", "Maintenance");
 
 
 const verifyLoginOtpHandler = async (req, res) => {
@@ -213,6 +214,7 @@ module.exports = {
   schoolLoginHandler,
   adminLoginHandler,
   studentLoginHandler,
+  maintenanceLoginHandler,
   refreshHandler,
   logoutHandler,
   meHandler,

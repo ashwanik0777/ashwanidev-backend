@@ -4,8 +4,9 @@ const jwt = require("jsonwebtoken");
 const env = require("../../config/env");
 const ROLES = require("../../constants/roles");
 const { query, getDbPool } = require("../../config/db");
-const { sendMail } = require("../../utils/mailer");
+const { sendMail, isTestMailbox } = require("../../utils/mailer");
 const { buildOtpEmail } = require("../../utils/mailTemplate");
+const { logInfo } = require("../../config/logger");
 
 const portalRoleMap = {
   teacher: [ROLES.FACULTY],
@@ -14,6 +15,32 @@ const portalRoleMap = {
   admin: [ROLES.SUPER_ADMIN],
   super_admin: [ROLES.SUPER_ADMIN],
   student: [ROLES.STUDENT],
+  // Maintenance grievance staff share one login tab and land on their own role-specific screen.
+  maintenance: [ROLES.JE, ROLES.VENDOR, ROLES.SENIOR_OFFICER, ROLES.DIRECTOR],
+};
+
+const MAINTENANCE_ROLES = new Set(portalRoleMap.maintenance);
+
+const getPortalName = (role) => {
+  if (role === ROLES.SUPER_ADMIN) return "Admin Portal";
+  if (role === ROLES.SCHOOL) return "School Portal";
+  if (MAINTENANCE_ROLES.has(role)) return "Maintenance Portal";
+  return "Faculty Portal";
+};
+
+/*
+ * Temporary test accounts use a reserved .test mailbox that can't receive mail.
+ * Outside production their OTP goes to the server log so they can still sign in;
+ * in production they simply can't complete OTP login.
+ */
+const deliverOtp = async (user, { subject, html, otpCode }) => {
+  if (isTestMailbox(user.email)) {
+    if (env.nodeEnv !== "production") {
+      logInfo(`[DEV ONLY] OTP for test account ${user.email}: ${otpCode}`);
+    }
+    return;
+  }
+  await sendMail({ to: user.email, subject, text: `Your OTP is ${otpCode}`, html });
 };
 
 /* ─── All GBU Schools & Orgs ─── */
@@ -307,16 +334,10 @@ const login = async (email, password, portalRole, requestMeta = {}) => {
     [user.id, hashOtp(otpCode), expiresAt],
   );
 
-  let portalName = "Faculty Portal";
-  if (user.role === ROLES.SUPER_ADMIN) {
-    portalName = "Admin Portal";
-  } else if (user.role === ROLES.SCHOOL) {
-    portalName = "School Portal";
-  }
-
+  const portalName = getPortalName(user.role);
   const subject = `GBU ${portalName} - Verification OTP`;
   const html = buildOtpEmail(user.name, otpCode, env.otpExpiresMinutes, "logging in", portalName);
-  await sendMail({ to: user.email, subject, text: `Your OTP is ${otpCode}`, html });
+  await deliverOtp(user, { subject, html, otpCode });
 
   return {
     requiresOtp: true,
@@ -512,16 +533,10 @@ const requestPasswordResetOtp = async (email) => {
     [user.id, hashOtp(otpCode), expiresAt],
   );
 
-  let portalName = "Faculty Portal";
-  if (user.role === ROLES.SUPER_ADMIN) {
-    portalName = "Admin Portal";
-  } else if (user.role === ROLES.SCHOOL) {
-    portalName = "School Portal";
-  }
-
+  const portalName = getPortalName(user.role);
   const subject = `GBU ${portalName} - Password Reset OTP`;
   const html = buildOtpEmail(user.name, otpCode, env.otpExpiresMinutes, "resetting password", portalName);
-  await sendMail({ to: user.email, subject, text: `Your OTP is ${otpCode}`, html });
+  await deliverOtp(user, { subject, html, otpCode });
 
   return { accepted: true };
 };

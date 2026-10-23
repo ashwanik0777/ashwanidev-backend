@@ -61,7 +61,15 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * Send a single email with retry logic.
  * On "Too many login attempts" (454 error), waits and retries.
  */
+// Reserved .test domain (RFC 2606) — used by temporary test accounts, can never receive mail.
+const isTestMailbox = (email) => /\.test$/i.test(String(email || "").trim());
+
 const sendMail = async ({ to, subject, text, html }, retries = 2) => {
+  if (isTestMailbox(to)) {
+    logInfo("Test mailbox — email not sent.", { to, subject });
+    return { queued: false, skipped: "test-mailbox" };
+  }
+
   const transport = getTransporter();
 
   if (!transport) {
@@ -130,5 +138,6 @@ const sendMail = async ({ to, subject, text, html }, retries = 2) => {
 module.exports = {
   sendMail,
   isMailConfigured,
+  isTestMailbox,
   delay,
 };

@@ -1,220 +1,91 @@
 const service = require('./service');
-const { validateCreateGrievance, validateUpdateStatus } = require('./validators');
+const { GrievanceError } = require('./errors');
 const { successResponse, errorResponse } = require('../../utils/response');
-const path = require('path');
-const fs = require('fs');
-const model = require('./model');
+const { logError } = require('../../config/logger');
 
-async function createGrievance(req, res) {
+// Wraps a handler so expected GrievanceErrors map to their status and anything else is a generic 500.
+const handle = (fn) => async (req, res) => {
     try {
-        const errors = validateCreateGrievance(req.body, req.user.role);
-        if (errors.length > 0) {
-            return errorResponse(res, 'Validation failed', errors, 400);
+        return await fn(req, res);
+    } catch (error) {
+        if (error instanceof GrievanceError) {
+            return errorResponse(res, error.message, [], error.status);
         }
-
-        const record = await service.submitGrievance(req.user, req.body, req.file);
-        return successResponse(res, 'Grievance submitted successfully', { ticket_id: record.ticket_id }, 201);
-    } catch (error) {
-        return errorResponse(res, error.message || 'Internal server error', null, 500);
-    }
-}
-
-async function getMyGrievances(req, res) {
-    try {
-        const records = await service.getMyGrievances(req.user);
-        return successResponse(res, 'Grievances retrieved successfully', records, 200);
-    } catch (error) {
-        return errorResponse(res, 'Failed to fetch grievances', null, 500);
-    }
-}
-
-async function getMyGrievanceDetail(req, res) {
-    try {
-        const record = await service.getMyGrievanceDetail(req.user, req.params.ticketId);
-        return successResponse(res, 'Grievance detail retrieved successfully', record, 200);
-    } catch (error) {
-        return errorResponse(res, error.message || 'Error fetching detail', null, 404);
-    }
-}
-
-async function getCategories(req, res) {
-    try {
-        const type = req.user.role === 'student' ? 'student' : 'faculty';
-        const categories = service.getCategories(type);
-        return successResponse(res, 'Categories retrieved successfully', categories, 200);
-    } catch (error) {
-        return errorResponse(res, 'Error fetching categories', null, 500);
-    }
-}
-
-async function getModuleStatus(req, res) {
-    try {
-        const moduleEnabled = await service.getSetting('module_enabled');
-        const studentEnabled = await service.getSetting('student_module_enabled');
-        return successResponse(res, 'Status retrieved', { 
-            module_enabled: moduleEnabled === 'true',
-            student_module_enabled: studentEnabled === 'true'
-        }, 200);
-    } catch (error) {
-        return errorResponse(res, 'Error fetching status', null, 500);
-    }
-}
-
-async function getManagedGrievances(req, res) {
-    try {
-        const { page = 1, limit = 10, status, category, search, submitterType, school } = req.query;
-        const result = await service.getGrievancesForManagement(req.user, { page, limit, status, category, search, submitterType, school });
-        return successResponse(res, 'Managed grievances retrieved', result.data, 200, {
-            total: result.total,
-            page: parseInt(page),
-            limit: parseInt(limit)
+        logError('Maintenance grievance request failed', {
+            requestId: req.requestId,
+            path: req.originalUrl,
+            error: error.message,
+            stack: error.stack,
         });
-    } catch (error) {
-        return errorResponse(res, error.message || 'Error fetching managed grievances', null, 500);
+        return errorResponse(res, 'Something went wrong. Please try again.', [], 500);
     }
-}
-
-async function getManagedGrievanceDetail(req, res) {
-    try {
-        // Simple security: check if it falls under scope
-        const scope = service.getGrievanceScope(req.user);
-        if (!scope) return errorResponse(res, 'Unauthorized', null, 403);
-        
-        const record = await model.getGrievanceDetail(req.params.ticketId);
-        if (!record) return errorResponse(res, 'Not found', null, 404);
-
-        return successResponse(res, 'Detail retrieved', record, 200);
-    } catch (error) {
-        return errorResponse(res, 'Error fetching detail', null, 500);
-    }
-}
-
-async function updateGrievanceStatus(req, res) {
-    try {
-        const errors = validateUpdateStatus(req.body);
-        if (errors.length > 0) return errorResponse(res, 'Validation failed', errors, 400);
-
-        const updated = await service.updateGrievance(req.user, req.params.ticketId, req.body.status, req.body.admin_remark, req);
-        return successResponse(res, 'Status updated successfully', updated, 200);
-    } catch (error) {
-        return errorResponse(res, error.message || 'Error updating status', null, 500);
-    }
-}
-
-async function getManagementStats(req, res) {
-    try {
-        const stats = await service.getStatsForManagement(req.user);
-        return successResponse(res, 'Stats retrieved', stats, 200);
-    } catch (error) {
-        return errorResponse(res, 'Error fetching stats', null, 500);
-    }
-}
-
-async function exportGrievances(req, res) {
-    try {
-        const scope = service.getGrievanceScope(req.user);
-        const data = await model.exportGrievances(scope);
-        
-        if (!data || data.length === 0) {
-            return errorResponse(res, 'No data to export', null, 404);
-        }
-
-        const headers = Object.keys(data[0]).join(',');
-        const rows = data.map(row => Object.values(row).map(val => `"${val || ''}"`).join(',')).join('\\n');
-        const csv = `${headers}\\n${rows}`;
-
-        res.header('Content-Type', 'text/csv');
-        res.attachment('grievances_export.csv');
-        return res.send(csv);
-    } catch (error) {
-        return errorResponse(res, 'Error exporting data', null, 500);
-    }
-}
-
-async function getSettings(req, res) {
-    try {
-        const moduleEnabled = await service.getSetting('module_enabled');
-        const studentEnabled = await service.getSetting('student_module_enabled');
-        return successResponse(res, 'Settings retrieved', {
-            module_enabled: moduleEnabled === 'true',
-            student_module_enabled: studentEnabled === 'true'
-        }, 200);
-    } catch (error) {
-        return errorResponse(res, 'Error fetching settings', null, 500);
-    }
-}
-
-async function toggleModule(req, res) {
-    try {
-        const current = await service.getSetting('module_enabled');
-        const newValue = current === 'true' ? 'false' : 'true';
-        await service.updateSetting('module_enabled', newValue, req.user.sub);
-        return successResponse(res, 'Module setting updated', { module_enabled: newValue === 'true' }, 200);
-    } catch (error) {
-        return errorResponse(res, 'Error updating module setting', null, 500);
-    }
-}
-
-async function toggleStudentModule(req, res) {
-    try {
-        const current = await service.getSetting('student_module_enabled');
-        const newValue = current === 'true' ? 'false' : 'true';
-        await service.updateSetting('student_module_enabled', newValue, req.user.sub);
-        return successResponse(res, 'Student module setting updated', { student_module_enabled: newValue === 'true' }, 200);
-    } catch (error) {
-        return errorResponse(res, 'Error updating student module setting', null, 500);
-    }
-}
-
-async function getAttachment(req, res) {
-    try {
-        // Support auth via Bearer header OR ?token= query param (for browser img/a tags)
-        const jwt = require('jsonwebtoken');
-        const env = require('../../config/env');
-        let token = null;
-        const authHeader = req.headers.authorization;
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            token = authHeader.split(' ')[1];
-        } else if (req.query.token) {
-            token = req.query.token;
-        }
-        if (!token) {
-            return errorResponse(res, 'Authentication required', null, 401);
-        }
-        let user;
-        try {
-            user = jwt.verify(token, env.jwtAccessSecret);
-        } catch (e) {
-            return errorResponse(res, 'Invalid or expired token', null, 401);
-        }
-
-        const record = await model.getGrievanceDetail(req.params.ticketId);
-        if (!record || !record.attachment_url) {
-            return errorResponse(res, 'Attachment not found', null, 404);
-        }
-
-        // Security check: only submitter or management roles can view
-        if (String(record.submitter_id) !== String(user.sub)) {
-            const scope = service.getGrievanceScope(user);
-            if (!scope) return errorResponse(res, 'Unauthorized to view this attachment', null, 403);
-        }
-
-        const fileName = path.basename(record.attachment_url);
-        const filePath = path.join(process.cwd(), 'storage', 'uploads', 'grievances', fileName);
-
-        if (!fs.existsSync(filePath)) {
-            return errorResponse(res, 'File not found on server', null, 404);
-        }
-
-        return res.sendFile(filePath);
-    } catch (error) {
-        return errorResponse(res, 'Error downloading attachment', null, 500);
-    }
-}
+};
 
 module.exports = {
-    createGrievance, getMyGrievances, getMyGrievanceDetail, getCategories,
-    getModuleStatus, getManagedGrievances, getManagedGrievanceDetail,
-    updateGrievanceStatus, getManagementStats, exportGrievances,
-    getSettings, toggleModule, toggleStudentModule, getAttachment
+    getMeta: handle(async (req, res) => successResponse(res, 'Maintenance form options', await service.getMeta())),
+
+    submitTicket: handle(async (req, res) => {
+        const result = await service.submitTicket(req.user, req.body || {}, req.file);
+        return successResponse(res, 'Grievance submitted successfully', result, 201);
+    }),
+
+    getMyTickets: handle(async (req, res) => successResponse(res, 'Your maintenance grievances', await service.getMyTickets(req.user))),
+
+    listTickets: handle(async (req, res) => {
+        const { items, pagination } = await service.listTickets(req.user, req.query);
+        return successResponse(res, 'Maintenance grievances', items, 200, pagination);
+    }),
+
+    getStats: handle(async (req, res) => successResponse(res, 'Maintenance grievance stats', await service.getStats(req.user, req.query))),
+
+    getTicket: handle(async (req, res) => successResponse(res, 'Ticket detail', await service.getTicketDetail(req.user, req.params.ticketId))),
+
+    performAction: handle(async (req, res) => {
+        const detail = await service.performAction(req.user, req.params.ticketId, req.params.action, req.body || {}, req.file);
+        return successResponse(res, 'Ticket updated', detail);
+    }),
+
+    downloadAttachment: handle(async (req, res) => {
+        const file = await service.getAttachment(req.user, req.params.ticketId, req.params.fileId);
+        res.setHeader('Content-Type', file.mime || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `inline; filename="${String(file.name || 'attachment').replace(/[^\w.\- ]/g, '_')}"`);
+        res.setHeader('Cache-Control', 'private, no-store');
+        return res.sendFile(file.absolutePath);
+    }),
+
+    listVendors: handle(async (req, res) => successResponse(res, 'Vendors', await service.listVendors(req.user, req.query.trade))),
+
+    getMe: handle(async (req, res) => successResponse(res, 'Staff profile', await service.getMyStaffProfile(req.user))),
+
+    getNotifications: handle(async (req, res) => successResponse(res, 'Notifications', await service.getNotifications(req.user))),
+
+    markNotificationsRead: handle(async (req, res) => {
+        await service.markNotificationsRead(req.user, req.body?.ids);
+        return successResponse(res, 'Notifications marked as read', {});
+    }),
+
+    getModuleStatus: handle(async (req, res) =>
+        successResponse(res, 'Module status', { module_enabled: await service.isModuleEnabled() })),
+
+    setModuleEnabled: handle(async (req, res) =>
+        successResponse(res, 'Module setting updated', await service.setModuleEnabled(req.user, req.body?.module_enabled))),
+
+    getAdminConfig: handle(async (req, res) => successResponse(res, 'Maintenance configuration', await service.getAdminConfig())),
+
+    setCategoryActive: handle(async (req, res) =>
+        successResponse(res, 'Category updated', await service.setCategoryActive(req.params.categoryKey, req.body?.is_active))),
+
+    createLocation: handle(async (req, res) => successResponse(res, 'Location added', await service.createLocation(req.body || {}), 201)),
+
+    updateLocation: handle(async (req, res) => successResponse(res, 'Location updated', await service.updateLocation(req.params.id, req.body || {}))),
+
+    updateRoutingRule: handle(async (req, res) =>
+        successResponse(res, 'Routing rule updated', await service.updateRoutingRule(req.user, req.params.id, req.body || {}))),
+
+    addHoliday: handle(async (req, res) => successResponse(res, 'Holiday saved', await service.addHoliday(req.body || {}), 201)),
+
+    removeHoliday: handle(async (req, res) => {
+        await service.removeHoliday(req.params.date);
+        return successResponse(res, 'Holiday removed', {});
+    }),
 };

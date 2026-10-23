@@ -18,6 +18,10 @@ const app = express();
 app.use(express.json({ limit: env.jsonBodyLimit }));
 app.disable("x-powered-by");
 
+// Old grievance attachments under uploads/grievances stay private; current ones
+// are served only by the access-checked maintenance files endpoint.
+app.use(`${env.uploadBaseUrl}/grievances`, (req, res) => res.status(404).end());
+
 // Serve uploaded files BEFORE helmet — uploaded assets are public and don't need
 // security headers. Helmet's Cross-Origin-Resource-Policy: same-origin would
 // block cross-origin image loading (frontend and backend on different ports).
