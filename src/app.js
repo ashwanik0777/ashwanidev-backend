@@ -12,6 +12,10 @@ const errorHandler = require("./middleware/errorHandler");
 const { apiRateLimiter } = require("./middleware/rateLimit");
 
 const app = express();
+// Requests arrive through one reverse proxy (Traefik). Trusting that single hop
+// makes req.ip the visitor's address, so rate limits count each visitor
+// separately instead of putting everyone into the proxy's one shared bucket.
+app.set("trust proxy", 1);
 // The admin portal saves an entire school's CMS content (notices, news, events,
 // newsletters and the event gallery) as one JSON document, which quickly exceeds
 // the 100kb express default and used to fail the save with a bare 413.
