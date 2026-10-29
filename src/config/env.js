@@ -15,7 +15,7 @@ const env = {
   jwtRefreshSecret:
     process.env.JWT_REFRESH_SECRET || "change-me-refresh-secret",
   jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || "15m",
-  jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
+  jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "1d",
   otpExpiresMinutes: Number(process.env.OTP_EXPIRES_MINUTES) || 10,
   otpMaxAttempts: Number(process.env.OTP_MAX_ATTEMPTS) || 5,
   otpPepper: process.env.OTP_PEPPER || "change-me-otp-pepper",

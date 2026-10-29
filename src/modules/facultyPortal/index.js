@@ -90,7 +90,7 @@ const signPortalRefreshToken = (user) => {
   return jwt.sign(
     { sub: user.id, role: user.role, type: "refresh" },
     env.jwtRefreshSecret,
-    { expiresIn: "7d" }
+    { expiresIn: env.jwtRefreshExpiresIn }
   );
 };
 
