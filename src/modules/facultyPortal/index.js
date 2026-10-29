@@ -20,6 +20,7 @@ const { query } = require("../../config/db");
 const { successResponse, errorResponse } = require("../../utils/response");
 const { sendMail } = require("../../utils/mailer");
 const { buildOtpEmail } = require("../../utils/mailTemplate");
+const { createCaptcha } = require("../../utils/captcha");
 const { authenticate, authorize } = require("../../middleware/auth");
 const ROLES = require("../../constants/roles");
 
@@ -57,11 +58,18 @@ const portalGuard = (req, res, next) => {
 const searchLimiter = rateLimit({ windowMs: 60_000, max: 30, message: { success: false, message: "Too many search requests. Try again in a minute." } });
 const otpSendLimiter = rateLimit({ windowMs: 60_000, max: 3, message: { success: false, message: "Too many OTP requests. Try again in a minute." } });
 const otpVerifyLimiter = rateLimit({ windowMs: 60_000, max: 10, message: { success: false, message: "Too many verify attempts. Try again in a minute." } });
+const captchaLimiter = rateLimit({ windowMs: 60_000, max: 30, message: { success: false, message: "Too many captcha requests. Try again in a minute." } });
+const captchaCheckLimiter = rateLimit({ windowMs: 60_000, max: 10, message: { success: false, message: "Too many attempts. Try again in a minute." } });
+
+const CAPTCHA_TTL_SECONDS = 600;
+const OTP_HOURLY_LIMIT = 5; // per email address
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ─────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────
 const hashOtp = (otp) => crypto.createHash("sha256").update(`${otp}:${env.otpPepper}`).digest("hex");
+const hashCaptcha = (answer) => crypto.createHash("sha256").update(`captcha:${answer}:${env.otpPepper}`).digest("hex");
 const generateOtp = () => String(crypto.randomInt(100000, 999999));
 
 const maskEmail = (email) => {
@@ -133,11 +141,105 @@ const ensurePortalSchema = async () => {
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     )
   `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS portal_captchas (
+      id UUID PRIMARY KEY,
+      answer_hash VARCHAR(64) NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      consumed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
   // registration_otps table is already created by facultyRegistration module
 };
 
-// Run schema bootstrap on module load
-ensurePortalSchema().catch(() => {});
+// Run schema bootstrap on module load. Captcha endpoints await it too, so a
+// failed first attempt is retried instead of breaking OTP sending.
+let portalSchemaReady = null;
+const ensurePortalSchemaOnce = () => {
+  if (!portalSchemaReady) {
+    portalSchemaReady = ensurePortalSchema().catch((err) => {
+      portalSchemaReady = null;
+      throw err;
+    });
+  }
+  return portalSchemaReady;
+};
+ensurePortalSchemaOnce().catch(() => {});
+
+// Every OTP request must carry a solved captcha. The challenge is consumed on
+// the first attempt (right or wrong), so it can never be replayed.
+const requireCaptcha = async (req, res, next) => {
+  try {
+    const captchaId = String(req.body?.captchaId || "").trim();
+    const answer = String(req.body?.captchaAnswer || "").replace(/\s+/g, "").toUpperCase();
+    if (!UUID_PATTERN.test(captchaId) || !answer) {
+      return errorResponse(res, "Please complete the security check.", [{ field: "captcha", message: "Captcha is required" }], 400);
+    }
+
+    await ensurePortalSchemaOnce();
+    const result = await query(
+      `UPDATE portal_captchas SET consumed_at = NOW()
+       WHERE id = $1 AND consumed_at IS NULL AND expires_at > NOW()
+       RETURNING answer_hash`,
+      [captchaId]
+    );
+    if (!result.rows.length) {
+      return errorResponse(res, "Security check expired. Please try the new image.", [{ field: "captcha", message: "Captcha expired" }], 400);
+    }
+
+    const expected = Buffer.from(result.rows[0].answer_hash, "hex");
+    const actual = Buffer.from(hashCaptcha(answer), "hex");
+    if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
+      await auditLog("captcha_failed", {
+        facultyId: req.body?.facultyId || null,
+        ip: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+      return errorResponse(res, "Incorrect security code. Please try the new image.", [{ field: "captcha", message: "Incorrect captcha" }], 400);
+    }
+
+    next();
+  } catch (err) {
+    return errorResponse(res, "Security check failed", [{ message: err.message }], 500);
+  }
+};
+
+
+// ═══════════════════════════════════════════════════════════════
+//  ENDPOINT 0: Get Captcha
+//  POST /api/v1/faculty-portal/captcha
+//  Returns a one-time image challenge required by send-otp
+// ═══════════════════════════════════════════════════════════════
+router.post(
+  "/faculty-portal/captcha",
+  portalGuard,
+  captchaLimiter,
+  async (req, res) => {
+    try {
+      await ensurePortalSchemaOnce();
+      const { text, image } = await createCaptcha();
+      const captchaId = crypto.randomUUID();
+
+      // Housekeeping — drop challenges that expired more than an hour ago
+      await query(`DELETE FROM portal_captchas WHERE expires_at < NOW() - INTERVAL '1 hour'`);
+      await query(
+        `INSERT INTO portal_captchas (id, answer_hash, expires_at)
+         VALUES ($1, $2, NOW() + make_interval(secs => $3))`,
+        [captchaId, hashCaptcha(text), CAPTCHA_TTL_SECONDS]
+      );
+
+      res.setHeader("Cache-Control", "no-store");
+      return successResponse(res, "Captcha generated", {
+        captchaId,
+        image,
+        expiresInSeconds: CAPTCHA_TTL_SECONDS,
+      });
+    } catch (err) {
+      return errorResponse(res, "Failed to load security check", [{ message: err.message }], 500);
+    }
+  }
+);
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -188,11 +290,14 @@ router.get(
 // ═══════════════════════════════════════════════════════════════
 //  ENDPOINT 2: Send OTP
 //  POST /api/v1/faculty-portal/send-otp
-//  Body: { facultyId: "SOICT-F0001" } or { email: "new@gbu.ac.in" }
+//  Body: { facultyId: "SOICT-F0001" } or { email: "new@gbu.ac.in" },
+//        plus { captchaId, captchaAnswer } from ENDPOINT 0
 // ═══════════════════════════════════════════════════════════════
 router.post(
   "/faculty-portal/send-otp",
   portalGuard,
+  captchaCheckLimiter,
+  requireCaptcha,
   otpSendLimiter,
   async (req, res) => {
     try {
@@ -236,6 +341,16 @@ router.post(
       );
       if (recentOtp.rows.length) {
         return errorResponse(res, "OTP already sent. Please wait 60 seconds before requesting again.", [], 429);
+      }
+
+      // Hourly cap — stops anyone from repeatedly mailing OTPs to the same person
+      const hourlyOtps = await query(
+        `SELECT COUNT(*)::int AS count FROM registration_otps
+         WHERE email = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
+        [targetEmail]
+      );
+      if (hourlyOtps.rows[0].count >= OTP_HOURLY_LIMIT) {
+        return errorResponse(res, "Too many OTP requests for this email. Please try again after an hour.", [], 429);
       }
 
       // Invalidate old OTPs for this email

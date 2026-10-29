@@ -272,6 +272,22 @@ router.put("/faculty/me/profile", authenticate, authorize(ROLES.FACULTY), async 
 		if (!linkedId) return errorResponse(res, "No faculty profile linked", [], 404);
 
 		const b = req.body || {};
+
+		// School/department change. Only the faculty portal sends schoolCode, so
+		// callers that don't (e.g. the website dashboard) leave both untouched.
+		let placement = null;
+		if (b.schoolCode !== undefined) {
+			const department = normalize(b.department);
+			if (!department || department.length > 180) {
+				return errorResponse(res, "Validation failed", [{ field: "department", message: "Please select a valid department" }], 400);
+			}
+			const schoolResult = await query(`SELECT code FROM schools WHERE UPPER(code) = $1 LIMIT 1`, [normalize(b.schoolCode).toUpperCase()]);
+			if (!schoolResult.rows.length) {
+				return errorResponse(res, "Validation failed", [{ field: "school", message: "Selected school does not exist" }], 400);
+			}
+			placement = { schoolCode: schoolResult.rows[0].code, department };
+		}
+
 		const result = await query(
 			`UPDATE faculty_profiles SET
 				name = COALESCE(NULLIF(TRIM($2), ''), name),
@@ -280,6 +296,8 @@ router.put("/faculty/me/profile", authenticate, authorize(ROLES.FACULTY), async 
 				office = $10, image_url = $11, faculty_url = $12, cv_link = $13,
 				google_scholar = $14, orcid = $15, linkedin = $16, phone = $17,
 				tags = $18::jsonb, research_areas = $19::jsonb, tab_data = $20::jsonb,
+				school = COALESCE($22, school), school_code = COALESCE($22, school_code),
+				department = COALESCE($23, department),
 				updated_by = $21, updated_at = NOW()
 			WHERE id = $1
 			RETURNING ${FULL_SELECT}`,
@@ -305,6 +323,8 @@ router.put("/faculty/me/profile", authenticate, authorize(ROLES.FACULTY), async 
 				JSON.stringify(Array.isArray(b.researchAreas) ? b.researchAreas.filter(a => (a.title && a.title.trim()) || (a.description && a.description.trim())) : []),
 				JSON.stringify(sanitizeTabData(b.tabData && typeof b.tabData === "object" ? b.tabData : {})),
 				Number(req.user?.sub) || null,
+				placement?.schoolCode ?? null,
+				placement?.department ?? null,
 			]
 		);
 
