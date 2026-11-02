@@ -2,7 +2,7 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const { query } = require("../../config/db");
 const { successResponse, errorResponse } = require("../../utils/response");
-const { authenticate, authorize } = require("../../middleware/auth");
+const { authenticate, authorize, forgetSessions } = require("../../middleware/auth");
 const { ensureAuthBootstrap } = require("../auth/auth.service");
 const { sendMail, isMailConfigured, delay } = require("../../utils/mailer");
 const ROLES = require("../../constants/roles");
@@ -673,6 +673,15 @@ router.put("/admin/accounts/:id", adminAuth, async (req, res) => {
 
 		const result = await query(sql, params);
 		const updated = result.rows[0];
+
+		// A new password or a deactivated account ends every existing session at once.
+		if (updated && (finalPasswordHash || !updated.is_active)) {
+			await query(
+				`UPDATE auth_refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
+				[updated.id],
+			);
+			forgetSessions({ userId: updated.id });
+		}
 
 		await logAdminAction({
 			req,

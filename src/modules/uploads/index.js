@@ -355,7 +355,7 @@ router.delete(
       });
     } catch (error) {
       console.error("File delete failed:", error);
-      return errorResponse(res, error.message, [], 500);
+      return errorResponse(res, "File delete failed", [{ field: "file", message: error.message }], 500);
     }
   }
 );
