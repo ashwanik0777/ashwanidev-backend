@@ -10,6 +10,8 @@ const env = {
   // School CMS content is saved as a single JSON document; 100kb (the express
   // default) is not enough once a school has a full announcements archive.
   jsonBodyLimit: process.env.JSON_BODY_LIMIT || "10mb",
+  // Limit for requests without a logged-in session (public forms, trackers).
+  publicBodyLimit: process.env.PUBLIC_BODY_LIMIT || "100kb",
   dbSslEnabled: String(process.env.DB_SSL_ENABLED || "false") === "true",
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET || "change-me-access-secret",
   jwtRefreshSecret:
@@ -59,6 +61,39 @@ const env = {
   facultyPortalExpiresAt: process.env.FACULTY_PORTAL_EXPIRES_AT || "",
   facultyPortalAccessCode: process.env.FACULTY_PORTAL_ACCESS_CODE || "",
   facultyPortalUrl: process.env.FACULTY_PORTAL_URL || "http://localhost:5174",
+
+  // Creates the built-in demo admin/school/student and grievance staff accounts
+  // with their well-known passwords. Only for local development — never set
+  // this on a server reachable from the internet.
+  seedDemoUsers: String(process.env.SEED_DEMO_USERS || "false") === "true",
 };
+
+/*
+ * Anyone who knows a signing secret can mint tokens for any role, and the
+ * fallbacks above are public in this repo. Refuse to start without real values
+ * in every environment rather than running silently on the defaults.
+ */
+const REQUIRED_SECRETS = [
+  { name: "JWT_ACCESS_SECRET", value: env.jwtAccessSecret, minLength: 32 },
+  { name: "JWT_REFRESH_SECRET", value: env.jwtRefreshSecret, minLength: 32 },
+  { name: "OTP_PEPPER", value: env.otpPepper, minLength: 16 },
+];
+
+const secretProblems = REQUIRED_SECRETS.flatMap(({ name, value, minLength }) => {
+  if (!process.env[name] || value.startsWith("change-me")) return [`${name} is not set`];
+  if (value.length < minLength) return [`${name} must be at least ${minLength} characters`];
+  return [];
+});
+
+if (env.jwtAccessSecret === env.jwtRefreshSecret) {
+  secretProblems.push("JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be different");
+}
+
+if (secretProblems.length) {
+  throw new Error(
+    `Insecure configuration, refusing to start:\n  - ${secretProblems.join("\n  - ")}\n` +
+      "Generate values with: node -e \"console.log(require('crypto').randomBytes(48).toString('hex'))\"",
+  );
+}
 
 module.exports = env;

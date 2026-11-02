@@ -58,6 +58,10 @@ If credentials are valid but route-role mapping fails, API returns `401 Invalid 
 
 ## Demo Accounts (DB Seeded)
 
+Seeded only when `SEED_DEMO_USERS=true` is set — local development only, never
+on a server reachable from the internet. On any database where these accounts
+already exist, change their passwords or deactivate them.
+
 - Teacher
   - Email: `faculty@gbu.ac.in`
   - Password: `Faculty@123`

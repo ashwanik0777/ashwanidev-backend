@@ -75,7 +75,7 @@ Remove-Item Env:PGPASSWORD
 ## 5. Verify Backend Role Access
 
 ```powershell
-& "C:/Program Files/PostgreSQL/18/bin/psql.exe" "postgresql://gbu-user:12345678@localhost:5432/gbu-db" -c "SELECT current_user, current_database(), has_table_privilege(current_user, 'public.notices', 'SELECT') AS can_select_notices;"
+& "C:/Program Files/PostgreSQL/18/bin/psql.exe" "postgresql://gbu-user:<gbu_user_password>@localhost:5432/gbu-db" -c "SELECT current_user, current_database(), has_table_privilege(current_user, 'public.notices', 'SELECT') AS can_select_notices;"
 ```
 
 Expected: `can_select_notices = t`

@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const env = require('../../config/env');
 const { query } = require('../../config/db');
 const { logInfo, logError } = require('../../config/logger');
 const {
@@ -258,7 +259,9 @@ async function seedLookups() {
 }
 
 // Creates the temporary staff accounts once. Existing rows are never touched,
-// so a password changed after the first login survives restarts.
+// so a password changed after the first login survives restarts. New accounts
+// carry the well-known seed passwords, so they are only created when
+// SEED_DEMO_USERS is on; existing ones are still linked to routing rules.
 async function seedStaff() {
     const userIdsBySeedKey = {};
 
@@ -266,6 +269,8 @@ async function seedStaff() {
         try {
             const existing = await query(`SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`, [seed.email]);
             let userId = existing.rows[0]?.id;
+
+            if (!userId && !env.seedDemoUsers) continue;
 
             if (!userId) {
                 const passwordHash = await bcrypt.hash(seed.password, 12);

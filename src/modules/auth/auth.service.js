@@ -7,6 +7,7 @@ const { query, getDbPool } = require("../../config/db");
 const { sendMail, isTestMailbox } = require("../../utils/mailer");
 const { buildOtpEmail } = require("../../utils/mailTemplate");
 const { logInfo } = require("../../config/logger");
+const { forgetSessions } = require("../../middleware/auth");
 
 const portalRoleMap = {
   teacher: [ROLES.FACULTY],
@@ -109,10 +110,13 @@ const getExpiresAtFromToken = (token) => {
   return new Date(decoded.exp * 1000);
 };
 
-const signAccessToken = (user) => {
+// `sid` ties the access token to its refresh-token row so revoking that
+// session (logout, password reset) also ends the access token.
+const signAccessToken = (user, sid) => {
   return jwt.sign(
     {
       sub: user.id,
+      sid,
       email: user.email,
       role: user.role,
       name: user.name,
@@ -206,6 +210,12 @@ const ensureAuthBootstrap = async () => {
     );
   `);
 
+  // Login and password-reset OTPs share this table. Without a purpose a reset
+  // OTP (which needs only an email to request) could complete a login and skip
+  // the password. Rows from before this column existed stay NULL and match
+  // neither flow.
+  await query(`ALTER TABLE password_reset_otps ADD COLUMN IF NOT EXISTS purpose VARCHAR(20);`);
+
   await query(
     `CREATE INDEX IF NOT EXISTS idx_users_email ON users((LOWER(email)));`,
   );
@@ -225,8 +235,9 @@ const ensureAuthBootstrap = async () => {
     `CREATE INDEX IF NOT EXISTS idx_password_reset_otps_user_active ON password_reset_otps(user_id, consumed_at, expires_at, created_at DESC);`,
   );
 
-  // Seed demo users (admin + 8 school accounts)
-  for (const item of demoUsers) {
+  // Seed demo users (admin + 8 school accounts). Their passwords are in this
+  // file, so only do it when explicitly enabled for local development.
+  for (const item of env.seedDemoUsers ? demoUsers : []) {
     try {
       const passwordHash = await bcrypt.hash(item.password, 12);
       await query(
@@ -320,6 +331,7 @@ const login = async (email, password, portalRole, requestMeta = {}) => {
     UPDATE password_reset_otps
     SET consumed_at = NOW()
     WHERE user_id = $1
+      AND purpose = 'login'
       AND consumed_at IS NULL
       AND expires_at > NOW()
     `,
@@ -328,8 +340,8 @@ const login = async (email, password, portalRole, requestMeta = {}) => {
 
   await query(
     `
-    INSERT INTO password_reset_otps (user_id, otp_hash, expires_at)
-    VALUES ($1, $2, $3)
+    INSERT INTO password_reset_otps (user_id, otp_hash, expires_at, purpose)
+    VALUES ($1, $2, $3, 'login')
     `,
     [user.id, hashOtp(otpCode), expiresAt],
   );
@@ -360,21 +372,24 @@ const verifyLoginOtp = async (email, otp, newPassword, requestMeta = {}) => {
     [normalizedEmail],
   );
 
+  // Same answer for an unknown email as for an expired OTP, so this endpoint
+  // can't be used to find out which emails have accounts.
+  const expiredOtp = { success: false, message: "OTP expired. Please login again." };
   const user = userResult.rows[0];
-  if (!user || !user.is_active) return { success: false, message: "Invalid user" };
+  if (!user || !user.is_active) return expiredOtp;
 
   const otpResult = await query(
     `
     SELECT id, otp_hash, attempts
     FROM password_reset_otps
-    WHERE user_id = $1 AND consumed_at IS NULL AND expires_at > NOW()
+    WHERE user_id = $1 AND purpose = 'login' AND consumed_at IS NULL AND expires_at > NOW()
     ORDER BY created_at DESC LIMIT 1
     `,
     [user.id],
   );
 
   const activeOtp = otpResult.rows[0];
-  if (!activeOtp) return { success: false, message: "OTP expired. Please login again." };
+  if (!activeOtp) return expiredOtp;
 
   if (hashOtp(otp) !== activeOtp.otp_hash) {
     const nextAttempts = Number(activeOtp.attempts || 0) + 1;
@@ -395,16 +410,18 @@ const verifyLoginOtp = async (email, otp, newPassword, requestMeta = {}) => {
 
   await query(`UPDATE password_reset_otps SET consumed_at = NOW() WHERE id = $1`, [activeOtp.id]);
 
-  const accessToken = signAccessToken(user);
   const refreshToken = signRefreshToken(user);
 
-  await query(
+  const sessionResult = await query(
     `
     INSERT INTO auth_refresh_tokens (user_id, token_hash, user_agent, ip_address, expires_at)
     VALUES ($1, $2, $3, $4, $5)
+    RETURNING id
     `,
     [user.id, hashValue(refreshToken), requestMeta.userAgent || null, requestMeta.ipAddress || null, getExpiresAtFromToken(refreshToken)]
   );
+
+  const accessToken = signAccessToken(user, sessionResult.rows[0].id);
 
   return {
     success: true,
@@ -461,7 +478,7 @@ const refresh = async (token) => {
       return null;
     }
 
-    const accessToken = signAccessToken(user);
+    const accessToken = signAccessToken(user, activeToken.id);
     return { accessToken };
   } catch (_error) {
     return null;
@@ -481,10 +498,12 @@ const logout = async (token) => {
     SET revoked_at = NOW()
     WHERE token_hash = $1
       AND revoked_at IS NULL
+    RETURNING id
     `,
     [hashValue(token)],
   );
 
+  result.rows.forEach((row) => forgetSessions({ sid: row.id }));
   return result.rowCount > 0;
 };
 
@@ -519,6 +538,7 @@ const requestPasswordResetOtp = async (email) => {
     UPDATE password_reset_otps
     SET consumed_at = NOW()
     WHERE user_id = $1
+      AND purpose = 'reset'
       AND consumed_at IS NULL
       AND expires_at > NOW()
     `,
@@ -527,8 +547,8 @@ const requestPasswordResetOtp = async (email) => {
 
   await query(
     `
-    INSERT INTO password_reset_otps (user_id, otp_hash, expires_at)
-    VALUES ($1, $2, $3)
+    INSERT INTO password_reset_otps (user_id, otp_hash, expires_at, purpose)
+    VALUES ($1, $2, $3, 'reset')
     `,
     [user.id, hashOtp(otpCode), expiresAt],
   );
@@ -560,9 +580,11 @@ const verifyOtpAndResetPassword = async ({ email, otp, newPassword }) => {
     [normalizedEmail],
   );
 
+  // Unknown email answers exactly like an expired OTP (no account enumeration).
+  const expiredOtp = { success: false, code: "OTP_EXPIRED", message: "OTP expired. Please request a new OTP" };
   const user = userResult.rows[0];
   if (!user || !user.is_active) {
-    return { success: false, code: "INVALID_REQUEST", message: "Invalid email or OTP" };
+    return expiredOtp;
   }
 
   const otpResult = await query(
@@ -570,6 +592,7 @@ const verifyOtpAndResetPassword = async ({ email, otp, newPassword }) => {
     SELECT id, otp_hash, attempts
     FROM password_reset_otps
     WHERE user_id = $1
+      AND purpose = 'reset'
       AND consumed_at IS NULL
       AND expires_at > NOW()
     ORDER BY created_at DESC
@@ -580,7 +603,7 @@ const verifyOtpAndResetPassword = async ({ email, otp, newPassword }) => {
 
   const activeOtp = otpResult.rows[0];
   if (!activeOtp) {
-    return { success: false, code: "OTP_EXPIRED", message: "OTP expired. Please request a new OTP" };
+    return expiredOtp;
   }
 
   const incomingOtpHash = hashOtp(otp);
@@ -644,6 +667,7 @@ const verifyOtpAndResetPassword = async ({ email, otp, newPassword }) => {
     client.release();
   }
 
+  forgetSessions({ userId: user.id });
   return { success: true };
 };
 

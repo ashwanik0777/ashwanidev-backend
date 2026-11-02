@@ -79,10 +79,11 @@ const maskEmail = (email) => {
   return `${visible}${"*".repeat(Math.max(0, local.length - 3))}@${domain}`;
 };
 
-const signPortalAccessToken = (user) => {
+const signPortalAccessToken = (user, sid) => {
   return jwt.sign(
     {
       sub: user.id,
+      sid,
       email: user.email,
       role: user.role,
       name: user.name,
@@ -514,16 +515,18 @@ router.post(
           hasPassword = false;
         }
 
-        // Issue tokens
-        const accessToken = signPortalAccessToken(user);
+        // Issue tokens. The refresh token is stored first so the access token
+        // can carry its session id and die with it on logout.
         const refreshToken = signPortalRefreshToken(user);
 
-        // Store refresh token
-        await query(
+        const sessionResult = await query(
           `INSERT INTO auth_refresh_tokens (user_id, token_hash, user_agent, ip_address, expires_at)
-           VALUES ($1, $2, $3, $4, $5)`,
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id`,
           [user.id, hashValue(refreshToken), req.headers["user-agent"] || null, req.ip || null, getExpiresAtFromToken(refreshToken)]
         );
+
+        const accessToken = signPortalAccessToken(user, sessionResult.rows[0].id);
 
         await auditLog("otp_verified", {
           facultyId,

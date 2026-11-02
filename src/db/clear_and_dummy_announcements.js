@@ -6,9 +6,27 @@
  * 4. Seed GBU and SOICT schools with school-level and college-level dummy data.
  */
 
+require('dotenv').config();
 const { Pool } = require('pg');
 
-const DATABASE_URL = 'postgresql://neondb_owner:npg_gmyJkt3c4xDh@ep-steep-art-a10yu9l2-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
+// The target comes from DATABASE_URL in .env — never hardcode a connection
+// string (with its password) in the repo.
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('❌ DATABASE_URL is not set. Add it to .env.');
+  process.exit(1);
+}
+
+// This script wipes notices, news, newsletters, events and every school's
+// content. Make the caller name the database host so it can't be pointed at
+// the wrong database (e.g. production) by accident.
+const targetHost = new URL(DATABASE_URL).hostname;
+const confirmArg = process.argv.find((arg) => arg.startsWith('--confirm='));
+if (!confirmArg || confirmArg.slice('--confirm='.length) !== targetHost) {
+  console.error(`⚠️  This will DELETE all notices, news, newsletters, events and school content on: ${targetHost}`);
+  console.error(`   To continue, run: node src/db/clear_and_dummy_announcements.js --confirm=${targetHost}`);
+  process.exit(1);
+}
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
