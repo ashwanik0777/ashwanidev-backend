@@ -34,6 +34,43 @@ const makeSyntheticEmail = (username) => {
 	return `${cleanUsername}@portal.gbu.local`;
 };
 
+/*
+ * The login OTP is emailed to users.email, so new admin and school accounts
+ * need a real, reachable address. Placeholder @portal.gbu.local addresses
+ * (made up from the username) can never receive the OTP.
+ */
+const SYNTHETIC_EMAIL_DOMAIN = "@portal.gbu.local";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const isDeliverableEmail = (email) =>
+	EMAIL_PATTERN.test(email) && !email.endsWith(SYNTHETIC_EMAIL_DOMAIN);
+
+const INVALID_EMAIL_ERROR = {
+	field: "email",
+	message: "A valid email is required — the login OTP is sent to this address",
+};
+
+const emailTakenByAnotherAccount = async (email, excludeAccountId = 0) => {
+	const result = await query(
+		`SELECT id FROM users WHERE LOWER(email) = $1 AND id <> $2 LIMIT 1`,
+		[email, excludeAccountId],
+	);
+	return result.rows.length > 0;
+};
+
+const duplicateAccountError = (res, error) => {
+	const onEmail = /email/i.test(`${error.constraint || ""} ${error.detail || ""}`);
+	return errorResponse(
+		res,
+		"Duplicate account",
+		[
+			onEmail
+				? { field: "email", message: "This email is already used by another account" }
+				: { field: "username", message: "Username already exists" },
+		],
+		409,
+	);
+};
+
 const toSafeInt = (value, fallback) => {
 	const parsed = Number.parseInt(String(value || ""), 10);
 	if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
@@ -46,6 +83,7 @@ const mapAccount = (row) => ({
 	id: row.id,
 	name: row.name,
 	username: row.username,
+	email: row.email || "",
 	password: "",
 	role: DB_TO_UI_ROLE[row.role] || "faculty",
 	status: row.is_active ? "active" : "inactive",
@@ -426,6 +464,7 @@ router.post("/admin/accounts", adminAuth, async (req, res) => {
 		const linkedFacultyId = normalize(req.body?.linkedFacultyId);
 		const linkedSchool = normalize(req.body?.linkedSchool);
 		const linkedDepartment = normalize(req.body?.linkedDepartment);
+		let email = normalize(req.body?.email).toLowerCase();
 
 		if (!username || !password || !UI_TO_DB_ROLE[role]) {
 			return errorResponse(
@@ -451,6 +490,24 @@ router.post("/admin/accounts", adminAuth, async (req, res) => {
 			return errorResponse(res, "Validation failed", roleValidation.errors, 400);
 		}
 
+		// New admin and school logins must come with a real email — the login OTP
+		// is sent there. Faculty accounts keep their existing flow.
+		if (role === "admin" || role === "school") {
+			if (!isDeliverableEmail(email)) {
+				return errorResponse(res, "Validation failed", [INVALID_EMAIL_ERROR], 400);
+			}
+			if (await emailTakenByAnotherAccount(email)) {
+				return errorResponse(
+					res,
+					"Duplicate account",
+					[{ field: "email", message: "This email is already used by another account" }],
+					409,
+				);
+			}
+		} else {
+			email = makeSyntheticEmail(username);
+		}
+
 		const passwordHash = await bcrypt.hash(password, 12);
 		const result = await query(
 			`
@@ -473,7 +530,7 @@ router.post("/admin/accounts", adminAuth, async (req, res) => {
 			`,
 			[
 				name || username,
-				makeSyntheticEmail(username),
+				email,
 				username,
 				UI_TO_DB_ROLE[role],
 				passwordHash,
@@ -503,12 +560,7 @@ router.post("/admin/accounts", adminAuth, async (req, res) => {
 		return successResponse(res, "Account created successfully", mapAccount(created), 201);
 	} catch (error) {
 		if (error.code === "23505") {
-			return errorResponse(
-				res,
-				"Duplicate account",
-				[{ field: "username", message: "Username already exists" }],
-				409,
-			);
+			return duplicateAccountError(res, error);
 		}
 
 		return errorResponse(
@@ -603,19 +655,20 @@ router.put("/admin/accounts/:id", adminAuth, async (req, res) => {
 		const newRole = UI_TO_DB_ROLE[role] || existing.role;
 		const becomingTeacher = newRole === ROLES.FACULTY && oldRole !== ROLES.FACULTY;
 
-		// If role is updated to faculty, lookup their real email from faculty_profiles
-		let userEmail = makeSyntheticEmail(username);
+		// Editing never touches an account's email: it keeps the one it has
+		// (faculty logins still follow their faculty profile's email). This used
+		// to reset admin/school emails to a made-up @portal.gbu.local address on
+		// every edit, which silently stopped their login OTPs.
+		let userEmail = existing.email;
 		let targetEmail = existing.email;
-		if (newRole === ROLES.FACULTY) {
-			if (linkedFacultyId) {
-				const facultyResult = await query(
-					`SELECT email FROM faculty_profiles WHERE id = $1 LIMIT 1`,
-					[linkedFacultyId]
-				);
-				if (facultyResult.rows.length && facultyResult.rows[0].email) {
-					userEmail = facultyResult.rows[0].email.toLowerCase();
-					targetEmail = userEmail;
-				}
+		if (newRole === ROLES.FACULTY && linkedFacultyId) {
+			const facultyResult = await query(
+				`SELECT email FROM faculty_profiles WHERE id = $1 LIMIT 1`,
+				[linkedFacultyId]
+			);
+			if (facultyResult.rows.length && facultyResult.rows[0].email) {
+				userEmail = facultyResult.rows[0].email.toLowerCase();
+				targetEmail = userEmail;
 			}
 		}
 
@@ -719,12 +772,7 @@ router.put("/admin/accounts/:id", adminAuth, async (req, res) => {
 		return successResponse(res, "Account updated successfully", mapAccount(updated));
 	} catch (error) {
 		if (error.code === "23505") {
-			return errorResponse(
-				res,
-				"Duplicate account",
-				[{ field: "username", message: "Username already exists" }],
-				409,
-			);
+			return duplicateAccountError(res, error);
 		}
 
 		return errorResponse(
