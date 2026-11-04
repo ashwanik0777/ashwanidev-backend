@@ -69,6 +69,20 @@ const sanitizeTabData = (rawTabData) => {
 	return cleaned;
 };
 
+// faculty_profiles.school holds the full name and school_code the short code,
+// whichever form a caller sends. Null when the value is not a known school.
+const findSchoolRecord = async (value) => {
+	const needle = normalize(value);
+	if (!needle) return null;
+	const result = await query(
+		`SELECT code, name FROM schools
+		 WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1) OR LOWER(COALESCE(slug, '')) = LOWER($1)
+		 LIMIT 1`,
+		[needle]
+	);
+	return result.rows[0] || null;
+};
+
 // Worked out on every read: "Present" entries grow each month, so a stored number goes stale.
 const experienceFields = (entries) => {
 	const months = calculateExperienceMonths(entries);
@@ -289,11 +303,11 @@ router.put("/faculty/me/profile", authenticate, authorize(ROLES.FACULTY), async 
 			if (!department || department.length > 180) {
 				return errorResponse(res, "Validation failed", [{ field: "department", message: "Please select a valid department" }], 400);
 			}
-			const schoolResult = await query(`SELECT code FROM schools WHERE UPPER(code) = $1 LIMIT 1`, [normalize(b.schoolCode).toUpperCase()]);
-			if (!schoolResult.rows.length) {
+			const school = await findSchoolRecord(b.schoolCode);
+			if (!school) {
 				return errorResponse(res, "Validation failed", [{ field: "school", message: "Selected school does not exist" }], 400);
 			}
-			placement = { schoolCode: schoolResult.rows[0].code, department };
+			placement = { schoolCode: school.code, schoolName: school.name, department };
 		}
 
 		const tabData = sanitizeTabData(b.tabData && typeof b.tabData === "object" ? b.tabData : {});
@@ -306,7 +320,7 @@ router.put("/faculty/me/profile", authenticate, authorize(ROLES.FACULTY), async 
 				office = $10, image_url = $11, faculty_url = $12, cv_link = $13,
 				google_scholar = $14, orcid = $15, linkedin = $16, phone = $17,
 				tags = $18::jsonb, research_areas = $19::jsonb, tab_data = $20::jsonb,
-				school = COALESCE($22, school), school_code = COALESCE($22, school_code),
+				school = COALESCE($24, school), school_code = COALESCE($22, school_code),
 				department = COALESCE($23, department),
 				updated_by = $21, updated_at = NOW()
 			WHERE id = $1
@@ -335,6 +349,7 @@ router.put("/faculty/me/profile", authenticate, authorize(ROLES.FACULTY), async 
 				Number(req.user?.sub) || null,
 				placement?.schoolCode ?? null,
 				placement?.department ?? null,
+				placement?.schoolName ?? null,
 			]
 		);
 
@@ -446,8 +461,10 @@ router.post("/admin/faculty", adminAuth, async (req, res) => {
 			b.school = normalize(req.user?.schoolCode) || b.school;
 		}
 		
-		const targetSchool = normalize(b.school);
-		const targetSchoolCode = normalize(b.school_code) || resolveSchoolCode(targetSchool);
+		const requestedSchool = normalize(b.school);
+		const schoolRecord = await findSchoolRecord(requestedSchool || b.school_code);
+		const targetSchool = schoolRecord?.name || requestedSchool;
+		const targetSchoolCode = schoolRecord?.code || normalize(b.school_code) || resolveSchoolCode(requestedSchool);
 		const facultyEmail = normalize(b.email).toLowerCase();
 
 		// Generate structured faculty ID: SCHOOLCODE-F0001
@@ -598,8 +615,10 @@ router.put("/admin/faculty/:id", adminAuth, async (req, res) => {
 		// Helper: use incoming value if provided (even if empty string), else keep existing
 		const pick = (incoming, existingVal) => incoming !== undefined ? incoming : existingVal;
 
-		const targetSchool = normalize(pick(b.school, existing.school));
-		const targetSchoolCode = normalize(pick(b.school_code, existing.school_code)) || targetSchool.toUpperCase();
+		const requestedSchool = normalize(pick(b.school, existing.school));
+		const schoolRecord = await findSchoolRecord(requestedSchool);
+		const targetSchool = schoolRecord?.name || requestedSchool;
+		const targetSchoolCode = schoolRecord?.code || normalize(pick(b.school_code, existing.school_code)) || requestedSchool.toUpperCase();
 		const tabData = b.tabData !== undefined ? sanitizeTabData(b.tabData && typeof b.tabData === "object" ? b.tabData : {}) : safeJsonParse(existing.tab_data, {});
 
 		const result = await query(
