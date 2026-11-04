@@ -7,6 +7,7 @@ const { ensureAuthBootstrap } = require("../auth/auth.service");
 const ROLES = require("../../constants/roles");
 const { generateFacultyId, resolveSchoolCode } = require("../../utils/facultyIdGenerator");
 const { sendMail } = require("../../utils/mailer");
+const { calculateExperienceMonths, calculateExperienceYears } = require("../../utils/facultyExperience");
 
 const router = express.Router();
 
@@ -68,6 +69,12 @@ const sanitizeTabData = (rawTabData) => {
 	return cleaned;
 };
 
+// Worked out on every read: "Present" entries grow each month, so a stored number goes stale.
+const experienceFields = (entries) => {
+	const months = calculateExperienceMonths(entries);
+	return { experience_years: Math.floor(months / 12), experience_months: months };
+};
+
 /* ─── Row mappers ─── */
 
 const mapFacultyBasic = (row) => ({
@@ -86,7 +93,7 @@ const mapFacultyBasic = (row) => ({
 const mapFacultyFull = (row) => ({
 	...mapFacultyBasic(row),
 	specialization: row.specialization || "",
-	experience_years: Number(row.experience_years) || 0,
+	...experienceFields(safeJsonParse(row.tab_data, {}).qualifications?.experience),
 	publications: Number(row.publications_count) || 0,
 	education: row.education || "",
 	shortBio: row.short_bio || "",
@@ -205,7 +212,8 @@ router.get("/faculty/public", async (req, res) => {
 
 		const rp = [...params, limit, offset];
 		const result = await query(
-			`SELECT id, name, designation, department, school, email, phone, image_url, specialization, experience_years, publications_count
+			`SELECT id, name, designation, department, school, email, phone, image_url, specialization, publications_count,
+			 tab_data->'qualifications'->'experience' AS experience_entries
 			 FROM faculty_profiles WHERE ${where} ORDER BY name ASC LIMIT $${rp.length - 1} OFFSET $${rp.length}`, rp
 		);
 
@@ -214,7 +222,7 @@ router.get("/faculty/public", async (req, res) => {
 				id: r.id, name: r.name, designation: r.designation || "", department: r.department || "",
 				school: r.school || "", email: r.email || "", phone: r.phone || "",
 				image_url: r.image_url || "", specialization: r.specialization || "",
-				experience_years: Number(r.experience_years) || 0, publications: Number(r.publications_count) || 0,
+				...experienceFields(r.experience_entries), publications: Number(r.publications_count) || 0,
 			})),
 			pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
 		});
@@ -288,6 +296,8 @@ router.put("/faculty/me/profile", authenticate, authorize(ROLES.FACULTY), async 
 			placement = { schoolCode: schoolResult.rows[0].code, department };
 		}
 
+		const tabData = sanitizeTabData(b.tabData && typeof b.tabData === "object" ? b.tabData : {});
+
 		const result = await query(
 			`UPDATE faculty_profiles SET
 				name = COALESCE(NULLIF(TRIM($2), ''), name),
@@ -306,7 +316,7 @@ router.put("/faculty/me/profile", authenticate, authorize(ROLES.FACULTY), async 
 				normalize(b.name),
 				normalize(b.designation),
 				normalize(b.specialization),
-				toSafeInt(b.experience_years, 0),
+				calculateExperienceYears(tabData.qualifications?.experience),
 				toSafeInt(b.publications, 0),
 				normalize(b.education),
 				normalize(b.shortBio),
@@ -321,7 +331,7 @@ router.put("/faculty/me/profile", authenticate, authorize(ROLES.FACULTY), async 
 				normalize(b.phone),
 				JSON.stringify(Array.isArray(b.tags) ? b.tags : []),
 				JSON.stringify(Array.isArray(b.researchAreas) ? b.researchAreas.filter(a => (a.title && a.title.trim()) || (a.description && a.description.trim())) : []),
-				JSON.stringify(sanitizeTabData(b.tabData && typeof b.tabData === "object" ? b.tabData : {})),
+				JSON.stringify(tabData),
 				Number(req.user?.sub) || null,
 				placement?.schoolCode ?? null,
 				placement?.department ?? null,
@@ -442,6 +452,7 @@ router.post("/admin/faculty", adminAuth, async (req, res) => {
 
 		// Generate structured faculty ID: SCHOOLCODE-F0001
 		const id = normalize(req.body?.id) || await generateFacultyId(targetSchoolCode);
+		const tabData = b.tabData && typeof b.tabData === "object" ? b.tabData : {};
 
 		const result = await query(
 			`INSERT INTO faculty_profiles (
@@ -455,13 +466,13 @@ router.post("/admin/faculty", adminAuth, async (req, res) => {
 			[
 				id, name, normalize(b.designation), normalize(b.department), targetSchool, targetSchoolCode,
 				facultyEmail, normalize(b.phone), b.isActive !== false,
-				normalize(b.specialization), toSafeInt(b.experience_years, 0), toSafeInt(b.publications, 0),
+				normalize(b.specialization), calculateExperienceYears(tabData.qualifications?.experience), toSafeInt(b.publications, 0),
 				normalize(b.education), normalize(b.shortBio), normalize(b.fullBio),
 				normalize(b.office), normalize(b.image_url), normalize(b.faculty_url),
 				normalize(b.cv), normalize(b.googleScholar), normalize(b.orcid),
 				JSON.stringify(Array.isArray(b.tags) ? b.tags : []),
 				JSON.stringify(Array.isArray(b.researchAreas) ? b.researchAreas : []),
-				JSON.stringify(b.tabData && typeof b.tabData === "object" ? b.tabData : {}),
+				JSON.stringify(tabData),
 				Number(req.user?.sub) || null,
 				Number(req.user?.sub) || null,
 			]
@@ -589,6 +600,7 @@ router.put("/admin/faculty/:id", adminAuth, async (req, res) => {
 
 		const targetSchool = normalize(pick(b.school, existing.school));
 		const targetSchoolCode = normalize(pick(b.school_code, existing.school_code)) || targetSchool.toUpperCase();
+		const tabData = b.tabData !== undefined ? sanitizeTabData(b.tabData && typeof b.tabData === "object" ? b.tabData : {}) : safeJsonParse(existing.tab_data, {});
 
 		const result = await query(
 			`UPDATE faculty_profiles SET
@@ -609,7 +621,7 @@ router.put("/admin/faculty/:id", adminAuth, async (req, res) => {
 				normalize(pick(b.phone, existing.phone)),
 				b.isActive !== undefined ? b.isActive !== false : existing.is_active,
 				normalize(pick(b.specialization, existing.specialization)),
-				toSafeInt(pick(b.experience_years, existing.experience_years), 0),
+				calculateExperienceYears(tabData.qualifications?.experience),
 				toSafeInt(pick(b.publications, existing.publications_count), 0),
 				normalize(pick(b.education, existing.education)),
 				normalize(pick(b.shortBio, existing.short_bio)),
@@ -623,7 +635,7 @@ router.put("/admin/faculty/:id", adminAuth, async (req, res) => {
 				normalize(pick(b.linkedin, existing.linkedin)),
 				JSON.stringify(b.tags !== undefined ? (Array.isArray(b.tags) ? b.tags : []) : safeJsonParse(existing.tags, [])),
 				JSON.stringify(b.researchAreas !== undefined ? (Array.isArray(b.researchAreas) ? b.researchAreas.filter(a => (a.title && a.title.trim()) || (a.description && a.description.trim())) : []) : safeJsonParse(existing.research_areas, [])),
-				JSON.stringify(b.tabData !== undefined ? sanitizeTabData(b.tabData && typeof b.tabData === "object" ? b.tabData : {}) : safeJsonParse(existing.tab_data, {})),
+				JSON.stringify(tabData),
 				Number(req.user?.sub) || null,
 			]
 		);
