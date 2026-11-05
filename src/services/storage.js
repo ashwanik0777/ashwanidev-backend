@@ -63,8 +63,37 @@ const DOC_SIGNATURES = {
 };
 
 // ---------------------------------------------------------------------------
+// The types uploads.php serves on the website (gbu-website/public/uploads.php).
+// Any other extension would upload fine and then 404 there, so only these are stored.
+// ---------------------------------------------------------------------------
+const IMAGE_EXTENSIONS = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/avif": "avif",
+};
+
+const DOC_EXTENSIONS = {
+  "application/pdf": "pdf",
+  "application/msword": "doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.ms-excel": "xls",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+};
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * An upload refused for its type. The message is shown to the person uploading.
+ */
+function unsupportedType(message) {
+  const error = new Error(message);
+  error.status = 415;
+  return error;
+}
 
 /**
  * Sanitize a filename: lowercase, strip dangerous chars, truncate.
@@ -236,9 +265,10 @@ async function initialize() {
  * @param {Object} opts
  * @param {string} opts.folder - Route-aware folder (e.g. "schools/SOICT/clubs")
  * @param {string} opts.originalName - Original filename from user
+ * @param {string} opts.mimeType - MIME type, used when sharp cannot process the image
  * @returns {Object} { url, relativePath, originalName, storedName, width, height, size, originalSize, mimeType }
  */
-async function saveImage(buffer, { folder = "", originalName = "image", customName = "" } = {}) {
+async function saveImage(buffer, { folder = "", originalName = "image", customName = "", mimeType = "" } = {}) {
   assertPersistentPath(STORAGE_ROOT);
   const cleanFolder = sanitizeFolder(folder);
   const originalSize = buffer.length;
@@ -295,11 +325,12 @@ async function saveImage(buffer, { folder = "", originalName = "image", customNa
       let finalExt = "webp";
       let finalMime = "image/webp";
 
-      if (outputBuffer.length > originalSize && originalSize < 500 * 1024) {
-        // Keep original if it's smaller and already small
+      const originalMime = `image/${meta.format}`;
+      if (outputBuffer.length > originalSize && originalSize < 500 * 1024 && IMAGE_EXTENSIONS[originalMime]) {
+        // Keep original if it's smaller and already small, and the website can serve its type
         finalBuffer = buffer;
-        finalExt = meta.format || "webp";
-        finalMime = `image/${finalExt === "jpg" ? "jpeg" : finalExt}`;
+        finalExt = IMAGE_EXTENSIONS[originalMime];
+        finalMime = originalMime;
       }
 
       // Generate filename and path
@@ -345,8 +376,11 @@ async function saveImage(buffer, { folder = "", originalName = "image", customNa
     }
   }
 
-  // Without sharp (fallback)
-  const ext = path.extname(originalName).replace(".", "") || "jpg";
+  // Without sharp (fallback), or a format sharp could not read
+  const ext = IMAGE_EXTENSIONS[mimeType];
+  if (!ext || !verifyMagicBytes(buffer, mimeType)) {
+    throw unsupportedType("This image type is not supported. Please upload a JPG, PNG or WebP image.");
+  }
   const rawName = generateFilename(originalName, ext, customName);
   const dirPath = cleanFolder
     ? path.join(STORAGE_ROOT, "images", cleanFolder)
@@ -370,7 +404,7 @@ async function saveImage(buffer, { folder = "", originalName = "image", customNa
     height: null,
     size: buffer.length,
     originalSize: buffer.length,
-    mimeType: `image/${ext === "jpg" ? "jpeg" : ext}`,
+    mimeType,
   };
 }
 
@@ -394,8 +428,12 @@ function saveFile(buffer, { folder = "", originalName = "file", mimeType = "appl
     );
   }
 
+  const ext = DOC_EXTENSIONS[mimeType];
+  if (!ext) {
+    throw unsupportedType("Only document files are allowed (PDF, DOC, DOCX, XLS, XLSX)");
+  }
+
   const cleanFolder = sanitizeFolder(folder);
-  const ext = path.extname(originalName).replace(".", "") || "bin";
   const rawName = generateFilename(originalName, ext, customName);
 
   const dirPath = cleanFolder

@@ -27,21 +27,6 @@ function resolvePublicUrl(relativePath, req) {
   return `${protocol}://${host}${env.uploadBaseUrl}/${relativePath}`;
 }
 
-/**
- * Extract storage-relative path from a URL.
- * e.g. "http://localhost:3000/uploads/images/events/file.webp" → "images/events/file.webp"
- */
-function extractRelativePath(url) {
-  if (!url) return null;
-  // Try to extract path after /uploads/
-  const marker = '/uploads/';
-  const idx = url.indexOf(marker);
-  if (idx !== -1) return url.substring(idx + marker.length);
-  // If it's already a relative path
-  if (!url.startsWith('http') && !url.startsWith('/')) return url;
-  return null;
-}
-
 // ---------------------------------------------------------------------------
 // Multer: IMAGE uploads — ONLY image/* MIME types
 // ---------------------------------------------------------------------------
@@ -146,6 +131,9 @@ router.get("/upload/status", (_req, res) => {
 
 // ---------------------------------------------------------------------------
 // POST /upload/image — upload + optimize a single image
+//
+// Uploading never deletes an older file: the form may not be saved afterwards,
+// and the database would then point at a file that is gone.
 // ---------------------------------------------------------------------------
 router.post(
   "/upload/image",
@@ -187,21 +175,13 @@ router.post(
       const buffer = fs.readFileSync(tempPath);
       const folder = req.query.folder || "";
       const customName = req.query.name || "";
-      const replaceUrl = req.query.replace || "";
 
       const result = await storage.saveImage(buffer, {
         folder,
         originalName: req.file.originalname,
         customName,
+        mimeType: req.file.mimetype,
       });
-
-      // Auto-delete old file when replacing, only once the new one is safely saved
-      if (replaceUrl) {
-        try {
-          const oldPath = extractRelativePath(replaceUrl);
-          if (oldPath) await storage.deleteFile(oldPath);
-        } catch (_) { /* ignore delete errors */ }
-      }
 
       // Clean up temp
       cleanupTemp(tempPath);
@@ -227,7 +207,7 @@ router.post(
       console.error("Image upload failed:", error);
       return errorResponse(
         res,
-        "Image upload failed",
+        error.status === 415 ? error.message : "Image upload failed",
         [{ field: "image", message: error.message }],
         error.status || 500
       );
@@ -278,7 +258,6 @@ router.post(
       const buffer = fs.readFileSync(tempPath);
       const folder = req.query.folder || "";
       const customName = req.query.name || "";
-      const replaceUrl = req.query.replace || "";
 
       const result = storage.saveFile(buffer, {
         folder,
@@ -286,14 +265,6 @@ router.post(
         mimeType: req.file.mimetype,
         customName,
       });
-
-      // Auto-delete old file when replacing, only once the new one is safely saved
-      if (replaceUrl) {
-        try {
-          const oldPath = extractRelativePath(replaceUrl);
-          if (oldPath) storage.deleteFile(oldPath);
-        } catch (_) { /* ignore delete errors */ }
-      }
 
       // Clean up temp
       cleanupTemp(tempPath);
@@ -317,7 +288,7 @@ router.post(
       console.error("File upload failed:", error);
       return errorResponse(
         res,
-        "File upload failed",
+        error.status === 415 ? error.message : "File upload failed",
         [{ field: "file", message: error.message }],
         error.status || 500
       );
