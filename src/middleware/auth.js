@@ -4,17 +4,7 @@ const { query } = require('../config/db');
 const { logError } = require('../config/logger');
 const { errorResponse } = require('../utils/response');
 
-/*
- * A signed, unexpired access token is not enough on its own: it must still
- * belong to a live session. Each access token carries `sid`, the id of the
- * refresh-token row it was issued for, so revoking that row (logout, password
- * reset) or deactivating the user ends the access token immediately instead of
- * leaving it usable until it expires.
- *
- * Lookups are cached briefly to keep a DB round trip off most requests. This
- * process drops cache entries as soon as it revokes a session, so revocation
- * is immediate here and takes at most SESSION_CACHE_TTL_MS on other instances.
- */
+
 const SESSION_CACHE_TTL_MS = 15 * 1000;
 const SESSION_CACHE_MAX_ENTRIES = 5000;
 const sessionCache = new Map();
