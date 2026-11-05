@@ -16,6 +16,7 @@ const path = require("path");
 const crypto = require("crypto");
 const env = require("../config/env");
 const { logInfo, logError } = require("../config/logger");
+const { isPersistentPath, assertPersistentPath } = require("../utils/persistentStorage");
 
 // ---------------------------------------------------------------------------
 // Sharp — attempt to load, fallback gracefully
@@ -201,6 +202,16 @@ async function initialize() {
 
     logInfo("Storage initialized", { path: STORAGE_ROOT });
 
+    for (const root of [STORAGE_ROOT, path.resolve(env.privateStoragePath)]) {
+      if (!isPersistentPath(root)) {
+        logError(
+          "UNSAFE STORAGE PATH: the next deploy would delete these files, so uploads are refused. " +
+            "Set UPLOAD_STORAGE_PATH and PRIVATE_STORAGE_PATH to absolute paths outside the deploy folder.",
+          { path: root }
+        );
+      }
+    }
+
     if (sharpAvailable) {
       logInfo("sharp available — image optimization enabled");
     } else {
@@ -228,6 +239,7 @@ async function initialize() {
  * @returns {Object} { url, relativePath, originalName, storedName, width, height, size, originalSize, mimeType }
  */
 async function saveImage(buffer, { folder = "", originalName = "image", customName = "" } = {}) {
+  assertPersistentPath(STORAGE_ROOT);
   const cleanFolder = sanitizeFolder(folder);
   const originalSize = buffer.length;
 
@@ -373,6 +385,8 @@ async function saveImage(buffer, { folder = "", originalName = "image", customNa
  * @returns {Object} { url, relativePath, originalName, storedName, size, mimeType }
  */
 function saveFile(buffer, { folder = "", originalName = "file", mimeType = "application/octet-stream", customName = "" } = {}) {
+  assertPersistentPath(STORAGE_ROOT);
+
   // Verify magic bytes
   if (!verifyMagicBytes(buffer, mimeType)) {
     throw new Error(
@@ -455,8 +469,16 @@ function isSharpAvailable() {
   return sharpAvailable;
 }
 
+/**
+ * Whether new uploads are allowed: files here survive the next deploy.
+ */
+function isPersistent() {
+  return isPersistentPath(STORAGE_ROOT);
+}
+
 module.exports = {
   initialize,
+  isPersistent,
   saveImage,
   saveFile,
   deleteFile,

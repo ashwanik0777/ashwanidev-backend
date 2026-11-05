@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const env = require('../../config/env');
 const { GrievanceError } = require('./errors');
+const { isPersistentPath } = require('../../utils/persistentStorage');
 
 // Outside the public /uploads static root, so attachments are only reachable
 // through the authorised download endpoint.
@@ -39,6 +40,11 @@ const removeTemp = (file) => {
  */
 async function storeAttachment(file, ticketId) {
     if (!file) return null;
+
+    if (!isPersistentPath(PRIVATE_ROOT)) {
+        removeTemp(file);
+        throw new GrievanceError('Attachments cannot be saved right now. Please try again later or submit without one.', 503);
+    }
 
     const type = FILE_TYPES[file.mimetype];
     if (!type || !type.matches(readHeader(file.path))) {

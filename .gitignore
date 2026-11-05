@@ -71,5 +71,6 @@ insert_ict_faculty.js
 test_json.js
 test_ocfd.js
 backups
+storage/
 
 faculty_bulk_upload.csv

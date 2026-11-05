@@ -138,7 +138,7 @@ async function saveMetadata(result, uploaderId, fileCategory, folder) {
 // ---------------------------------------------------------------------------
 router.get("/upload/status", (_req, res) => {
   return successResponse(res, "Storage status", {
-    configured: true,
+    configured: storage.isPersistent(),
     provider: "local",
     sharpAvailable: storage.isSharpAvailable(),
   });
@@ -189,19 +189,19 @@ router.post(
       const customName = req.query.name || "";
       const replaceUrl = req.query.replace || "";
 
-      // Auto-delete old file when replacing
+      const result = await storage.saveImage(buffer, {
+        folder,
+        originalName: req.file.originalname,
+        customName,
+      });
+
+      // Auto-delete old file when replacing, only once the new one is safely saved
       if (replaceUrl) {
         try {
           const oldPath = extractRelativePath(replaceUrl);
           if (oldPath) await storage.deleteFile(oldPath);
         } catch (_) { /* ignore delete errors */ }
       }
-
-      const result = await storage.saveImage(buffer, {
-        folder,
-        originalName: req.file.originalname,
-        customName,
-      });
 
       // Clean up temp
       cleanupTemp(tempPath);
@@ -229,7 +229,7 @@ router.post(
         res,
         "Image upload failed",
         [{ field: "image", message: error.message }],
-        500
+        error.status || 500
       );
     }
   }
@@ -280,20 +280,20 @@ router.post(
       const customName = req.query.name || "";
       const replaceUrl = req.query.replace || "";
 
-      // Auto-delete old file when replacing
-      if (replaceUrl) {
-        try {
-          const oldPath = extractRelativePath(replaceUrl);
-          if (oldPath) storage.deleteFile(oldPath);
-        } catch (_) { /* ignore delete errors */ }
-      }
-
       const result = storage.saveFile(buffer, {
         folder,
         originalName: req.file.originalname,
         mimeType: req.file.mimetype,
         customName,
       });
+
+      // Auto-delete old file when replacing, only once the new one is safely saved
+      if (replaceUrl) {
+        try {
+          const oldPath = extractRelativePath(replaceUrl);
+          if (oldPath) storage.deleteFile(oldPath);
+        } catch (_) { /* ignore delete errors */ }
+      }
 
       // Clean up temp
       cleanupTemp(tempPath);
@@ -319,7 +319,7 @@ router.post(
         res,
         "File upload failed",
         [{ field: "file", message: error.message }],
-        500
+        error.status || 500
       );
     }
   }

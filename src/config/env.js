@@ -41,7 +41,8 @@ const env = {
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || "",
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || "",
 
-  // Local File Storage
+  // Local File Storage. In production both storage paths must be absolute and outside
+  // the deploy folder, or uploads are refused (see utils/persistentStorage.js).
   uploadStoragePath: process.env.UPLOAD_STORAGE_PATH || "./storage/uploads",
   uploadBaseUrl: process.env.UPLOAD_BASE_URL || "/uploads",
   uploadPublicUrl: process.env.UPLOAD_PUBLIC_URL || "",  // full public URL prefix e.g. http://localhost:3000/uploads
