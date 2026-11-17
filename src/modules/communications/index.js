@@ -5,7 +5,7 @@ const { getPagination } = require("../../utils/pagination");
 const { authenticate, authorize } = require("../../middleware/auth");
 const ROLES = require("../../constants/roles");
 const { ensureAnnouncementsSchema } = require("../announcements/store");
-const { UNIVERSITY_GATED_KINDS } = require("../announcements/schema");
+const { PUBLISH_SCOPES, UNIVERSITY_GATED_KINDS } = require("../announcements/schema");
 
 const router = express.Router();
 
@@ -74,7 +74,8 @@ const buildSortClause = ({ sortBy, order, sortFields, fallbackSortBy }) => {
 };
 
 /*
- * Public visibility rules, shared by every announcement endpoint.
+ * Where items saved before publish_scope existed show (see
+ * announcements/schema.js). Unchanged from before publish_scope:
  *
  * - Only 'published' rows are ever returned (pending/rejected stay internal).
  * - With ?schoolCode=SOICT: that school's own items plus university-wide ones.
@@ -84,13 +85,13 @@ const buildSortClause = ({ sortBy, order, sortFields, fallbackSortBy }) => {
  * should display everything. School-specific pages pass their schoolCode to
  * see their own items plus college-level ones.
  *
- * Notices and news differ (see announcements/schema.js):
+ * Notices and news differ:
  * - Without schoolCode: only approved college-level items, so school-level ones
  *   and requests still waiting for the admin stay off the university pages.
  * - With ?schoolCode=SOICT: all of that school's own items, whatever their
  *   status, plus approved college-level ones.
  */
-const buildVisibilityClause = (table, schoolCode, startIndex = 1) => {
+const olderVisibilityClause = (table, schoolCode, startIndex = 1) => {
   const params = [];
   let clause = `t.approval_status = 'published'`;
 
@@ -113,11 +114,36 @@ const buildVisibilityClause = (table, schoolCode, startIndex = 1) => {
   return { clause, params };
 };
 
+/*
+ * Public visibility rules, shared by every announcement endpoint. publish_scope
+ * is explained in announcements/schema.js; items without it keep the older
+ * rule above.
+ *
+ * - Without schoolCode, for the university pages: 'school_university' and
+ *   'university' items, once published.
+ * - With ?schoolCode=SOICT, for that school's pages: its 'school' and
+ *   'school_university' items whatever their approval status, so a request
+ *   still waiting for the admin shows on the school page.
+ */
+const buildVisibilityClause = (table, schoolCode, startIndex = 1) => {
+  const older = olderVisibilityClause(table, schoolCode, startIndex);
+  const scoped = schoolCode
+    ? `t.publish_scope IN ('${PUBLISH_SCOPES.SCHOOL}', '${PUBLISH_SCOPES.SCHOOL_UNIVERSITY}')
+        AND UPPER(t.school_code) = $${startIndex}`
+    : `t.publish_scope IN ('${PUBLISH_SCOPES.SCHOOL_UNIVERSITY}', '${PUBLISH_SCOPES.UNIVERSITY}')
+        AND t.approval_status = 'published'`;
+
+  return {
+    clause: `((t.publish_scope IS NULL AND (${older.clause})) OR (${scoped}))`,
+    params: older.params,
+  };
+};
+
 const publicSelect = (table, columns, schoolCode, orderBy) => {
   const { clause, params } = buildVisibilityClause(table, schoolCode);
   return {
     text: `
-      SELECT ${columns}, t.school_code, t.level, s.name AS school_name
+      SELECT ${columns}, t.school_code, t.level, t.publish_scope, s.name AS school_name
       FROM ${table} t
       LEFT JOIN schools s ON UPPER(s.code) = UPPER(t.school_code)
       WHERE ${clause}
@@ -132,6 +158,7 @@ const withSchoolMeta = (mapped, row) => ({
   schoolCode: row.school_code || null,
   schoolName: row.school_name || (row.school_code ? row.school_code : "GBU"),
   level: row.level || "college",
+  publishScope: row.publish_scope || "",
 });
 
 const toDateOnlyString = (value) => {
@@ -832,6 +859,7 @@ router.get("/events", async (req, res) => {
       schoolCode: row.school_code || null,
       schoolName: row.school_name || (row.school_code ? row.school_code : "GBU"),
       level: row.level || "college",
+      publishScope: row.publish_scope || "",
     }));
 
     return res.status(200).json({

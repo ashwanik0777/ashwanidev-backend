@@ -9,15 +9,26 @@
  *   school_code      owning school ("" / "GBU" means university-wide)
  *   level            'college' (whole university) | 'school' (one school only)
  *   approval_status  'published' | 'pending' | 'rejected'
+ *   publish_scope    where the item shows, chosen in the dashboard (below)
  *
- * A school account may publish its own school-level items directly, but a
- * college-level submission is held as 'pending' until a super admin approves it.
- * Public endpoints only ever return 'published' rows, with one exception below.
+ * publish_scope is set on every item saved after it was introduced:
  *
- * Notices and news are stricter about the university pages. A school-level item
- * stays on its school's page. A college-level item owned by a school shows on
- * that school's page straight away, whatever its status, and on the university
- * pages only once approved. Other kinds still list every published item there.
+ *   'school'             the school's page only
+ *   'school_university'  the school's page at once, whatever approval_status
+ *                        says, and the university pages once 'published'. A
+ *                        school's request waits as 'pending' for a super admin;
+ *                        a super admin's own choice is published straight away.
+ *   'university'         the university pages only (a super admin's own items)
+ *
+ * Items saved before that keep publish_scope NULL and the rule they were saved
+ * under, so they show exactly where they did:
+ *
+ *   notices, news     a school-level item on its school's page only; a
+ *   (UNIVERSITY_GATED_KINDS)  college-level item owned by a school on that
+ *                     school's page whatever its status, and on the university
+ *                     pages once published
+ *   other kinds       every published item on the university pages, and a
+ *                     school's published school-level items on its page
  */
 
 const LEVELS = { COLLEGE: "college", SCHOOL: "school" };
@@ -25,7 +36,14 @@ const APPROVAL = { PUBLISHED: "published", PENDING: "pending", REJECTED: "reject
 
 const UNIVERSITY_SCHOOL_CODE = "GBU";
 
+// Kinds whose items without publish_scope follow the stricter older rule above.
 const UNIVERSITY_GATED_KINDS = new Set(["notices", "news"]);
+
+const PUBLISH_SCOPES = {
+  SCHOOL: "school",
+  SCHOOL_UNIVERSITY: "school_university",
+  UNIVERSITY: "university",
+};
 
 /**
  * Per-kind description: the table it lives in, and how API fields map onto
@@ -148,6 +166,8 @@ const GOVERNANCE_COLUMNS = [
   ["reviewed_by_name", "VARCHAR(160) NOT NULL DEFAULT ''"],
   ["reviewed_at", "TIMESTAMP"],
   ["review_note", "TEXT"],
+  // No default: rows saved before this column existed keep NULL (see above).
+  ["publish_scope", "VARCHAR(30)"],
   ["created_at", "TIMESTAMP NOT NULL DEFAULT NOW()"],
   ["updated_at", "TIMESTAMP NOT NULL DEFAULT NOW()"],
 ];
@@ -180,6 +200,7 @@ module.exports = {
   GOVERNANCE_COLUMNS,
   KINDS,
   LEVELS,
+  PUBLISH_SCOPES,
   UNIVERSITY_GATED_KINDS,
   UNIVERSITY_SCHOOL_CODE,
 };

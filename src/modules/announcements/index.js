@@ -3,7 +3,7 @@ const { query } = require("../../config/db");
 const { successResponse, errorResponse } = require("../../utils/response");
 const { authenticate, authorize } = require("../../middleware/auth");
 const ROLES = require("../../constants/roles");
-const { APPROVAL, KINDS, LEVELS, UNIVERSITY_GATED_KINDS, UNIVERSITY_SCHOOL_CODE } = require("./schema");
+const { APPROVAL, KINDS, LEVELS, PUBLISH_SCOPES, UNIVERSITY_SCHOOL_CODE } = require("./schema");
 const {
   buildColumnValues,
   ensureAnnouncementsSchema,
@@ -39,48 +39,74 @@ const actorContext = (req) => {
   };
 };
 
+const SCHOOL_SCOPES = [PUBLISH_SCOPES.SCHOOL, PUBLISH_SCOPES.SCHOOL_UNIVERSITY];
+
+const SCOPE_REQUIRED = { field: "publishScope", message: "Please select where to publish" };
+
 /**
- * Decides the stored school_code / level / approval_status for a write.
+ * Decides where a write shows: school_code, level, approval_status and
+ * publish_scope (see schema.js). Returns { error } for a missing choice, or
+ * { governance }, which is null when the write must leave the placement alone.
  *
- * - Super admin publishes anything immediately, for any school.
- * - A school publishes its own school-level items immediately.
- * - A school asking for college-level reach is queued as 'pending' for review.
- * - For notices and news a college-level item keeps its school, so it stays on
- *   that school's page too. With no school it is the university's: school-level
- *   would leave it on no page at all.
+ * - A school chooses 'school' or 'school_university' on every save. The second
+ *   waits for a super admin before it reaches the university pages, and so does
+ *   every later edit of it.
+ * - A super admin filing for a school makes the same choice, published at once.
+ * - A super admin's item with no school is the university's own. A super admin
+ *   editing without a choice (the university-wide tab) changes nothing here.
  */
-const resolveGovernance = (actor, body, kind) => {
-  const requestedLevel =
-    String(body.level || "").toLowerCase() === LEVELS.SCHOOL ? LEVELS.SCHOOL : LEVELS.COLLEGE;
+const resolveGovernance = (actor, body, existing = null) => {
+  const scope = String(body.publishScope || "").trim().toLowerCase();
 
   if (actor.isAdmin) {
-    const requestedSchool = normalizeSchoolCode(body.schoolCode);
-    if (UNIVERSITY_GATED_KINDS.has(kind)) {
-      const hasSchool = !isUniversityCode(requestedSchool);
+    if (existing && !scope) return { governance: null };
+
+    const schoolCode = normalizeSchoolCode(body.schoolCode ?? existing?.school_code);
+    if (isUniversityCode(schoolCode)) {
       return {
-        level: hasSchool ? requestedLevel : LEVELS.COLLEGE,
-        schoolCode: hasSchool ? requestedSchool : UNIVERSITY_SCHOOL_CODE,
-        approvalStatus: APPROVAL.PUBLISHED,
+        governance: {
+          schoolCode: UNIVERSITY_SCHOOL_CODE,
+          level: LEVELS.COLLEGE,
+          approvalStatus: APPROVAL.PUBLISHED,
+          publishScope: PUBLISH_SCOPES.UNIVERSITY,
+        },
       };
     }
+    if (!SCHOOL_SCOPES.includes(scope)) return { error: SCOPE_REQUIRED };
     return {
-      level: requestedLevel,
-      // College-level items belong to the university, not to any one school.
-      schoolCode:
-        requestedLevel === LEVELS.COLLEGE
-          ? UNIVERSITY_SCHOOL_CODE
-          : requestedSchool || UNIVERSITY_SCHOOL_CODE,
-      approvalStatus: APPROVAL.PUBLISHED,
+      governance: {
+        schoolCode,
+        level: scope === PUBLISH_SCOPES.SCHOOL ? LEVELS.SCHOOL : LEVELS.COLLEGE,
+        approvalStatus: APPROVAL.PUBLISHED,
+        publishScope: scope,
+      },
     };
   }
 
   // School account: always pinned to its own school, regardless of what was sent.
+  if (!SCHOOL_SCOPES.includes(scope)) return { error: SCOPE_REQUIRED };
   return {
-    level: requestedLevel,
-    schoolCode: actor.schoolCode,
-    approvalStatus:
-      requestedLevel === LEVELS.COLLEGE ? APPROVAL.PENDING : APPROVAL.PUBLISHED,
+    governance: {
+      schoolCode: actor.schoolCode,
+      level: scope === PUBLISH_SCOPES.SCHOOL ? LEVELS.SCHOOL : LEVELS.COLLEGE,
+      approvalStatus: scope === PUBLISH_SCOPES.SCHOOL ? APPROVAL.PUBLISHED : APPROVAL.PENDING,
+      publishScope: scope,
+    },
   };
+};
+
+/** Tells the person saving where the item now shows. */
+const placementMessage = (label, verb, actor, governance) => {
+  const schoolPage = actor.isAdmin ? "the school page" : "your school page";
+  if (governance.publishScope === PUBLISH_SCOPES.SCHOOL) {
+    return `${label} ${verb} on ${schoolPage}`;
+  }
+  if (governance.publishScope === PUBLISH_SCOPES.SCHOOL_UNIVERSITY) {
+    return governance.approvalStatus === APPROVAL.PENDING
+      ? `${label} ${verb} on ${schoolPage} and sent to the admin for approval for the university page`
+      : `${label} ${verb} on ${schoolPage} and the university page`;
+  }
+  return `${label} ${verb} on the university page`;
 };
 
 /** A school may only touch rows belonging to it. */
@@ -237,12 +263,17 @@ router.post(
         return errorResponse(res, "Validation failed", missing, 400);
       }
 
-      const governance = resolveGovernance(actor, req.body, kind);
+      const { governance, error: scopeError } = resolveGovernance(actor, req.body);
+      if (scopeError) {
+        return errorResponse(res, scopeError.message, [scopeError], 400);
+      }
+
       const allColumns = [
         ...columns,
         "school_code",
         "level",
         "approval_status",
+        "publish_scope",
         "created_by",
         "created_by_name",
       ];
@@ -251,6 +282,7 @@ router.post(
         governance.schoolCode,
         governance.level,
         governance.approvalStatus,
+        governance.publishScope,
         actor.userId,
         actor.name,
       ];
@@ -263,17 +295,10 @@ router.post(
         allValues,
       );
 
-      const created = mapRow(kind, result.rows[0]);
-      const queued = governance.approvalStatus === APPROVAL.PENDING;
-
-      const queuedMessage = UNIVERSITY_GATED_KINDS.has(kind)
-        ? `${config.label} published on your school page and sent to the admin for the university page`
-        : `${config.label} submitted for admin approval`;
-
       return successResponse(
         res,
-        queued ? queuedMessage : `${config.label} published successfully`,
-        created,
+        placementMessage(config.label, "published", actor, governance),
+        mapRow(kind, result.rows[0]),
         201,
       );
     } catch (error) {
@@ -327,21 +352,27 @@ router.put(
         return errorResponse(res, "Validation failed", missing, 400);
       }
 
-      const governance = resolveGovernance(actor, {
-        level: req.body.level ?? existing.rows[0].level,
-        schoolCode: req.body.schoolCode ?? existing.rows[0].school_code,
-      }, kind);
+      const { governance, error: scopeError } = resolveGovernance(
+        actor,
+        req.body,
+        existing.rows[0],
+      );
+      if (scopeError) {
+        return errorResponse(res, scopeError.message, [scopeError], 400);
+      }
 
-      // Editing an already-approved item as a school re-opens review only when
-      // the item is (or becomes) college-level.
-      const nextApproval = actor.isAdmin
-        ? existing.rows[0].approval_status === APPROVAL.PENDING
-          ? APPROVAL.PUBLISHED
-          : existing.rows[0].approval_status
-        : governance.approvalStatus;
-
-      const allColumns = [...columns, "school_code", "level", "approval_status", "updated_at"];
-      const allValues = [...values, governance.schoolCode, governance.level, nextApproval];
+      const allColumns = [...columns];
+      const allValues = [...values];
+      if (governance) {
+        allColumns.push("school_code", "level", "approval_status", "publish_scope");
+        allValues.push(
+          governance.schoolCode,
+          governance.level,
+          governance.approvalStatus,
+          governance.publishScope,
+        );
+      }
+      allColumns.push("updated_at");
 
       const assignments = allColumns
         .map((column, index) =>
@@ -354,7 +385,13 @@ router.put(
         [...allValues, id],
       );
 
-      return successResponse(res, `${config.label} updated`, mapRow(kind, result.rows[0]));
+      return successResponse(
+        res,
+        governance
+          ? placementMessage(config.label, "saved", actor, governance)
+          : `${config.label} updated`,
+        mapRow(kind, result.rows[0]),
+      );
     } catch (error) {
       return errorResponse(
         res,

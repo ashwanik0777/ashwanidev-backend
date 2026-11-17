@@ -284,6 +284,7 @@ const mapRow = (kind, row) => {
   item.schoolCode = row.school_code || "";
   item.level = row.level || LEVELS.COLLEGE;
   item.approvalStatus = row.approval_status || APPROVAL.PUBLISHED;
+  item.publishScope = row.publish_scope || "";
   item.createdBy = row.created_by ?? null;
   item.createdByName = row.created_by_name || "";
   item.reviewedByName = row.reviewed_by_name || "";
