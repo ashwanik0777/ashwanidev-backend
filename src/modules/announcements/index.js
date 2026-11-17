@@ -3,7 +3,7 @@ const { query } = require("../../config/db");
 const { successResponse, errorResponse } = require("../../utils/response");
 const { authenticate, authorize } = require("../../middleware/auth");
 const ROLES = require("../../constants/roles");
-const { APPROVAL, KINDS, LEVELS, UNIVERSITY_SCHOOL_CODE } = require("./schema");
+const { APPROVAL, KINDS, LEVELS, UNIVERSITY_GATED_KINDS, UNIVERSITY_SCHOOL_CODE } = require("./schema");
 const {
   buildColumnValues,
   ensureAnnouncementsSchema,
@@ -45,13 +45,24 @@ const actorContext = (req) => {
  * - Super admin publishes anything immediately, for any school.
  * - A school publishes its own school-level items immediately.
  * - A school asking for college-level reach is queued as 'pending' for review.
+ * - For notices and news a college-level item keeps its school, so it stays on
+ *   that school's page too. With no school it is the university's: school-level
+ *   would leave it on no page at all.
  */
-const resolveGovernance = (actor, body) => {
+const resolveGovernance = (actor, body, kind) => {
   const requestedLevel =
     String(body.level || "").toLowerCase() === LEVELS.SCHOOL ? LEVELS.SCHOOL : LEVELS.COLLEGE;
 
   if (actor.isAdmin) {
     const requestedSchool = normalizeSchoolCode(body.schoolCode);
+    if (UNIVERSITY_GATED_KINDS.has(kind)) {
+      const hasSchool = !isUniversityCode(requestedSchool);
+      return {
+        level: hasSchool ? requestedLevel : LEVELS.COLLEGE,
+        schoolCode: hasSchool ? requestedSchool : UNIVERSITY_SCHOOL_CODE,
+        approvalStatus: APPROVAL.PUBLISHED,
+      };
+    }
     return {
       level: requestedLevel,
       // College-level items belong to the university, not to any one school.
@@ -226,7 +237,7 @@ router.post(
         return errorResponse(res, "Validation failed", missing, 400);
       }
 
-      const governance = resolveGovernance(actor, req.body);
+      const governance = resolveGovernance(actor, req.body, kind);
       const allColumns = [
         ...columns,
         "school_code",
@@ -255,11 +266,13 @@ router.post(
       const created = mapRow(kind, result.rows[0]);
       const queued = governance.approvalStatus === APPROVAL.PENDING;
 
+      const queuedMessage = UNIVERSITY_GATED_KINDS.has(kind)
+        ? `${config.label} published on your school page and sent to the admin for the university page`
+        : `${config.label} submitted for admin approval`;
+
       return successResponse(
         res,
-        queued
-          ? `${config.label} submitted for admin approval`
-          : `${config.label} published successfully`,
+        queued ? queuedMessage : `${config.label} published successfully`,
         created,
         201,
       );
@@ -317,7 +330,7 @@ router.put(
       const governance = resolveGovernance(actor, {
         level: req.body.level ?? existing.rows[0].level,
         schoolCode: req.body.schoolCode ?? existing.rows[0].school_code,
-      });
+      }, kind);
 
       // Editing an already-approved item as a school re-opens review only when
       // the item is (or becomes) college-level.

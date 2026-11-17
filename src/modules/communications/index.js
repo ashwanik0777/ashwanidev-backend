@@ -5,6 +5,7 @@ const { getPagination } = require("../../utils/pagination");
 const { authenticate, authorize } = require("../../middleware/auth");
 const ROLES = require("../../constants/roles");
 const { ensureAnnouncementsSchema } = require("../announcements/store");
+const { UNIVERSITY_GATED_KINDS } = require("../announcements/schema");
 
 const router = express.Router();
 
@@ -82,10 +83,26 @@ const buildSortClause = ({ sortBy, order, sortFields, fallbackSortBy }) => {
  * The frontend's global /announcements/* pages call without schoolCode and
  * should display everything. School-specific pages pass their schoolCode to
  * see their own items plus college-level ones.
+ *
+ * Notices and news differ (see announcements/schema.js):
+ * - Without schoolCode: only approved college-level items, so school-level ones
+ *   and requests still waiting for the admin stay off the university pages.
+ * - With ?schoolCode=SOICT: all of that school's own items, whatever their
+ *   status, plus approved college-level ones.
  */
-const buildVisibilityClause = (schoolCode, startIndex = 1) => {
+const buildVisibilityClause = (table, schoolCode, startIndex = 1) => {
   const params = [];
   let clause = `t.approval_status = 'published'`;
+
+  if (UNIVERSITY_GATED_KINDS.has(table)) {
+    const universityWide = `t.level = 'college' AND t.approval_status = 'published'`;
+    if (!schoolCode) return { clause: universityWide, params };
+    params.push(String(schoolCode).trim().toUpperCase());
+    return {
+      clause: `(UPPER(t.school_code) = $${startIndex} OR (${universityWide}))`,
+      params,
+    };
+  }
 
   if (schoolCode) {
     params.push(String(schoolCode).trim().toUpperCase());
@@ -97,7 +114,7 @@ const buildVisibilityClause = (schoolCode, startIndex = 1) => {
 };
 
 const publicSelect = (table, columns, schoolCode, orderBy) => {
-  const { clause, params } = buildVisibilityClause(schoolCode);
+  const { clause, params } = buildVisibilityClause(table, schoolCode);
   return {
     text: `
       SELECT ${columns}, t.school_code, t.level, s.name AS school_name

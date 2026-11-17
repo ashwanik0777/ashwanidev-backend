@@ -12,13 +12,20 @@
  *
  * A school account may publish its own school-level items directly, but a
  * college-level submission is held as 'pending' until a super admin approves it.
- * Public endpoints only ever return 'published' rows.
+ * Public endpoints only ever return 'published' rows, with one exception below.
+ *
+ * Notices and news are stricter about the university pages. A school-level item
+ * stays on its school's page. A college-level item owned by a school shows on
+ * that school's page straight away, whatever its status, and on the university
+ * pages only once approved. Other kinds still list every published item there.
  */
 
 const LEVELS = { COLLEGE: "college", SCHOOL: "school" };
 const APPROVAL = { PUBLISHED: "published", PENDING: "pending", REJECTED: "rejected" };
 
 const UNIVERSITY_SCHOOL_CODE = "GBU";
+
+const UNIVERSITY_GATED_KINDS = new Set(["notices", "news"]);
 
 /**
  * Per-kind description: the table it lives in, and how API fields map onto
@@ -173,5 +180,6 @@ module.exports = {
   GOVERNANCE_COLUMNS,
   KINDS,
   LEVELS,
+  UNIVERSITY_GATED_KINDS,
   UNIVERSITY_SCHOOL_CODE,
 };
