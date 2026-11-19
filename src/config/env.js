@@ -34,7 +34,14 @@ const env = {
     Number(process.env.API_RATE_LIMIT_MAX) ||
     (String(process.env.NODE_ENV || "development") === "production" ? 300 : 2000),
   authRateLimitWindowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  // Failed sign-in attempts allowed per account from one network, per window.
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX) || 20,
+  // Failed sign-in attempts allowed from one network across all accounts (a campus shares one IP).
+  authRateLimitIpMax: Number(process.env.AUTH_RATE_LIMIT_IP_MAX) || 100,
+  // Failed token refresh / logout calls allowed from one network.
+  sessionRateLimitMax: Number(process.env.SESSION_RATE_LIMIT_MAX) || 100,
+  // Password-reset OTP emails per email address from one network.
+  otpRequestRateLimitMax: Number(process.env.OTP_REQUEST_RATE_LIMIT_MAX) || 5,
   
   // Cloudinary Config (legacy — kept for backward compatibility)
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || "",

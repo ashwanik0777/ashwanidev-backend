@@ -21,7 +21,9 @@ Active endpoints:
 
 - `auth.routes.js`
   - Registers auth routes.
-  - Applies `authRateLimiter` to write/auth endpoints.
+  - Applies the limiters from `middleware/rateLimit.js`: `loginRateLimiter` (failed sign-in / OTP
+    attempts, per account and per network), `sessionRateLimiter` (failed refresh / logout) and
+    `otpRequestRateLimiter` (password-reset OTP emails per address).
   - Protects `/me` with `authenticate` middleware.
 
 - `auth.controller.js`

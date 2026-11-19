@@ -1,4 +1,5 @@
 const { query } = require("../../config/db");
+const { stripEmoji } = require("../../utils/emoji");
 const {
   APPROVAL,
   EXTRA_COLUMNS,
@@ -203,7 +204,7 @@ const coerce = (spec, value) => {
     case "jsonArray":
       return toJsonArray(value);
     default:
-      return toText(value) ?? (spec.default ?? null);
+      return toText(spec.plainText ? stripEmoji(value) : value) ?? (spec.default ?? null);
   }
 };
 

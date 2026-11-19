@@ -97,6 +97,7 @@ const mapFacultyBasic = (row) => ({
 	designation: row.designation || "",
 	department: row.department || "",
 	school: row.school || "",
+	schoolCode: row.school_code || "",
 	email: row.email || "",
 	phone: row.phone || "",
 	isActive: row.is_active,
@@ -188,7 +189,7 @@ const ensureFacultyContext = async () => {
 	await ensureFacultyInfrastructure();
 };
 
-const FULL_SELECT = `id, name, designation, department, school, email, phone, is_active,
+const FULL_SELECT = `id, name, designation, department, school, school_code, email, phone, is_active,
 	specialization, experience_years, publications_count, education, short_bio, full_bio,
 	office, image_url, faculty_url, cv_link, google_scholar, orcid, linkedin,
 	tags, research_areas, tab_data, created_at, updated_at`;
@@ -408,14 +409,21 @@ router.get("/admin/faculty", adminAuth, async (req, res) => {
 		const totalPages = Math.max(1, Math.ceil(total / limit));
 		const resultParams = [...params, limit, offset];
 
+		// ?include=profile returns whole profiles, so a dashboard can show how complete each one is
+		// without fetching every faculty separately.
+		const includeProfile = normalize(req.query?.include).toLowerCase() === "profile";
+		const columns = includeProfile
+			? FULL_SELECT
+			: "id, name, designation, department, school, school_code, email, phone, is_active, created_at, updated_at";
+
 		const result = await query(
-			`SELECT id, name, designation, department, school, email, phone, is_active, created_at, updated_at
+			`SELECT ${columns}
 			FROM faculty_profiles WHERE ${whereClause} ORDER BY created_at DESC, id DESC
 			LIMIT $${resultParams.length - 1} OFFSET $${resultParams.length}`, resultParams
 		);
 
 		return successResponse(res, "Faculty profiles fetched successfully", {
-			items: result.rows.map(mapFacultyBasic),
+			items: result.rows.map(includeProfile ? mapFacultyFull : mapFacultyBasic),
 			pagination: { page, limit, total, totalPages },
 		});
 	} catch (error) {

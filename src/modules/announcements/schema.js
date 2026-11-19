@@ -48,6 +48,8 @@ const PUBLISH_SCOPES = {
 /**
  * Per-kind description: the table it lives in, and how API fields map onto
  * columns. `type` drives coercion so a form value never breaks the insert.
+ * `plainText` marks titles and descriptions: icons and emoji are removed from
+ * them on every save (src/utils/emoji.js).
  */
 const KINDS = {
   notices: {
@@ -55,8 +57,8 @@ const KINDS = {
     label: "Notice",
     dateColumn: "published_date",
     fields: {
-      title: { column: "title", type: "text", required: true },
-      content: { column: "content", type: "text" },
+      title: { column: "title", type: "text", required: true, plainText: true },
+      content: { column: "content", type: "text", plainText: true },
       date: { column: "published_date", type: "date", aliases: ["publishedDate"] },
       type: { column: "type", type: "text", default: "General" },
       priority: { column: "priority", type: "text", default: "medium" },
@@ -71,9 +73,9 @@ const KINDS = {
     label: "News",
     dateColumn: "published_date",
     fields: {
-      title: { column: "title", type: "text", required: true },
-      excerpt: { column: "excerpt", type: "text" },
-      content: { column: "content", type: "text" },
+      title: { column: "title", type: "text", required: true, plainText: true },
+      excerpt: { column: "excerpt", type: "text", plainText: true },
+      content: { column: "content", type: "text", plainText: true },
       date: { column: "published_date", type: "date", aliases: ["publishedDate"] },
       author: { column: "author", type: "text", default: "GBU" },
       department: { column: "department", type: "text" },
@@ -96,8 +98,8 @@ const KINDS = {
     label: "Event",
     dateColumn: "starts_at",
     fields: {
-      title: { column: "title", type: "text", required: true },
-      description: { column: "description", type: "text" },
+      title: { column: "title", type: "text", required: true, plainText: true },
+      description: { column: "description", type: "text", plainText: true },
       organizer: { column: "organizer", type: "text", default: "GBU" },
       venue: { column: "venue", type: "text" },
       location: { column: "location", type: "text" },
@@ -127,11 +129,11 @@ const KINDS = {
     label: "Newsletter",
     dateColumn: "published_date",
     fields: {
-      title: { column: "title", type: "text", required: true },
+      title: { column: "title", type: "text", required: true, plainText: true },
       issueNumber: { column: "issue_number", type: "text", aliases: ["issueNo"] },
       date: { column: "published_date", type: "date", aliases: ["publishedDate"] },
       coverImage: { column: "cover_image_url", type: "text", aliases: ["coverImageUrl"] },
-      excerpt: { column: "excerpt", type: "text" },
+      excerpt: { column: "excerpt", type: "text", plainText: true },
       pdfUrl: { column: "pdf_url", type: "text" },
       englishPdfLink: { column: "english_pdf_url", type: "text", aliases: ["pdfLink"] },
       hindiPdfLink: { column: "hindi_pdf_url", type: "text" },
@@ -145,7 +147,7 @@ const KINDS = {
     label: "Gallery album",
     dateColumn: "published_date",
     fields: {
-      title: { column: "title", type: "text", required: true },
+      title: { column: "title", type: "text", required: true, plainText: true },
       category: { column: "category", type: "text", default: "Events" },
       year: { column: "year", type: "text" },
       date: { column: "published_date", type: "date", aliases: ["publishedDate"] },

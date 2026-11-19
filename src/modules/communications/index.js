@@ -6,6 +6,7 @@ const { authenticate, authorize } = require("../../middleware/auth");
 const ROLES = require("../../constants/roles");
 const { ensureAnnouncementsSchema } = require("../announcements/store");
 const { PUBLISH_SCOPES, UNIVERSITY_GATED_KINDS } = require("../announcements/schema");
+const { stripEmoji } = require("../../utils/emoji");
 
 const router = express.Router();
 
@@ -941,9 +942,10 @@ router.post(
   authenticate,
   authorize(ROLES.SUPER_ADMIN),
   async (req, res) => {
+    // Announcement titles and descriptions carry no icons (see utils/emoji.js).
+    const title = stripEmoji(req.body.title);
+    const description = stripEmoji(req.body.description);
     const {
-      title,
-      description,
       organizer,
       venue,
       location,
@@ -1139,14 +1141,15 @@ router.post(
   authenticate,
   authorize(ROLES.SUPER_ADMIN),
   async (req, res) => {
+    // Announcement titles and descriptions carry no icons (see utils/emoji.js).
+    const title = stripEmoji(req.body.title);
+    const summary = stripEmoji(req.body.summary);
+    const contentHtml = stripEmoji(req.body.contentHtml);
     const {
-      title,
       issueNo,
       issueNumber,
       issueDate,
       publishedDate,
-      summary,
-      contentHtml,
       pdfUrl,
       coverImageUrl,
       views = 0,
