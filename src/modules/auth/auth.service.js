@@ -285,6 +285,28 @@ const ensureAuthBootstrap = async () => {
   authBootstrapped = true;
 };
 
+/** Issues the refresh + access tokens for a signed-in user (same as after OTP verification). */
+const createLoginSession = async (user, requestMeta = {}) => {
+  const refreshToken = signRefreshToken(user);
+
+  const sessionResult = await query(
+    `
+    INSERT INTO auth_refresh_tokens (user_id, token_hash, user_agent, ip_address, expires_at)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id
+    `,
+    [user.id, hashValue(refreshToken), requestMeta.userAgent || null, requestMeta.ipAddress || null, getExpiresAtFromToken(refreshToken)]
+  );
+
+  const accessToken = signAccessToken(user, sessionResult.rows[0].id);
+
+  return {
+    user: { id: user.id, name: user.name, email: user.email, username: user.username, role: user.role },
+    accessToken,
+    refreshToken,
+  };
+};
+
 const login = async (email, password, portalRole, requestMeta = {}) => {
   await ensureAuthBootstrap();
   const normalizedLoginId = normalizeEmail(email);
@@ -320,6 +342,18 @@ const login = async (email, password, portalRole, requestMeta = {}) => {
     if (!allowedRoles || !allowedRoles.includes(user.role)) {
       return null;
     }
+  }
+
+  // TEMPORARY testing bypass: grievance staff test accounts (.test mailbox,
+  // which can never receive the OTP) sign in directly while GRIEVANCE_TEST_LOGIN is on.
+  if (
+    env.grievanceTestLogin &&
+    MAINTENANCE_ROLES.has(user.role) &&
+    isTestMailbox(user.email) &&
+    !user.force_password_reset
+  ) {
+    logInfo(`Grievance test login without OTP: ${user.username || user.email}`);
+    return createLoginSession(user, requestMeta);
   }
 
   // Generate OTP for login
