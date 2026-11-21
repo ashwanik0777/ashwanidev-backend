@@ -74,6 +74,11 @@ const env = {
   // with their well-known passwords. Only for local development — never set
   // this on a server reachable from the internet.
   seedDemoUsers: String(process.env.SEED_DEMO_USERS || "false") === "true",
+
+  // TEMPORARY, for grievance testing: lets the maintenance staff test accounts
+  // (@gbu-maintenance.test mailboxes) sign in with username + password, no OTP.
+  // Turn off once those accounts are mapped to real emails.
+  grievanceTestLogin: String(process.env.GRIEVANCE_TEST_LOGIN || "false") === "true",
 };
 
 /*

@@ -101,8 +101,9 @@ function getViewerScope(user) {
             return { kind: 'je', where: 'g.assigned_je_id = $1', params: [me] };
         case ROLES.VENDOR:
             return { kind: 'vendor', where: 'g.assigned_vendor_id = $1', params: [me] };
+        // Senior officers monitor all maintenance work; they can still only act on escalated cases.
         case ROLES.SENIOR_OFFICER:
-            return { kind: 'senior_officer', where: 'g.escalated_at IS NOT NULL', params: [] };
+            return { kind: 'senior_officer', where: 'TRUE', params: [] };
         case ROLES.FACULTY:
             if (user.grievanceRole === 'vc') return { kind: 'vc', where: 'TRUE', params: [] };
             if (user.grievanceRole === 'hod' && user.schoolCode && user.departmentName) {
@@ -136,7 +137,7 @@ function canView(user, ticket) {
         case 'vendor':
             return ticket.assigned_vendor_id === me ? 'vendor' : null;
         case 'senior_officer':
-            return ticket.escalated_at ? 'senior_officer' : null;
+            return 'senior_officer';
         case 'hod':
             return sameText(ticket.school_code, user.schoolCode) && sameText(ticket.department_name, user.departmentName) ? 'hod' : null;
         default:
@@ -887,8 +888,11 @@ async function getStats(user, rawFilters = {}) {
     stats.pending = stats.total - stats.resolved;
     stats.by_stage = byStage;
 
-    if (['admin', 'director', 'vc'].includes(scope.kind)) {
+    if (['admin', 'director', 'vc', 'senior_officer'].includes(scope.kind)) {
         stats.by_je = await model.countByJe(scope, dateFilters);
+    }
+    if (scope.kind === 'senior_officer') {
+        stats.by_vendor = await model.countByVendor(scope, dateFilters);
     }
     return stats;
 }

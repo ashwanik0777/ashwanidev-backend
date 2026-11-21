@@ -207,15 +207,46 @@ async function countByJe(scope, filters = {}) {
     const result = await query(
         `SELECT g.assigned_je_id AS je_id,
                 COALESCE(je.name, 'Unassigned') AS je_name,
+                COALESCE(p.designation, '') AS designation,
+                COALESCE(p.trade, '') AS trade,
                 COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE g.stage IN ('unrouted', 'pending_je_review'))::int AS awaiting_je,
+                COUNT(*) FILTER (WHERE g.stage IN ('assigned_to_vendor', 'inspection_submitted', 'work_in_progress', 'work_completed'))::int AS in_progress,
                 COUNT(*) FILTER (WHERE g.stage = 'closed')::int AS closed,
                 COUNT(*) FILTER (WHERE g.stage = 'escalated')::int AS escalated,
                 COUNT(*) FILTER (WHERE g.stage = 'delayed')::int AS delayed
          FROM grievances g
          LEFT JOIN users je ON je.id = g.assigned_je_id
+         LEFT JOIN grv_staff_profiles p ON p.user_id = g.assigned_je_id
          WHERE ${where}
-         GROUP BY g.assigned_je_id, je.name
-         ORDER BY je_name`,
+         GROUP BY g.assigned_je_id, je.name, p.designation, p.trade
+         ORDER BY p.trade NULLS LAST, je_name`,
+        params
+    );
+    return result.rows;
+}
+
+// Work handled by each vendor (only tickets that reached a vendor).
+async function countByVendor(scope, filters = {}) {
+    const { where, params } = appendFilters(scope, filters);
+    const result = await query(
+        `SELECT g.assigned_vendor_id AS vendor_id,
+                COALESCE(v.name, 'Vendor') AS vendor_name,
+                COALESCE(p.company_name, '') AS company_name,
+                COALESCE(p.trade, '') AS trade,
+                COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE g.stage = 'assigned_to_vendor')::int AS visit_pending,
+                COUNT(*) FILTER (WHERE g.stage = 'assigned_to_vendor' AND g.site_visit_overdue_at IS NOT NULL)::int AS visit_overdue,
+                COUNT(*) FILTER (WHERE g.stage IN ('inspection_submitted', 'work_in_progress', 'work_completed'))::int AS in_progress,
+                COUNT(*) FILTER (WHERE g.stage = 'delayed')::int AS delayed,
+                COUNT(*) FILTER (WHERE g.stage = 'escalated')::int AS escalated,
+                COUNT(*) FILTER (WHERE g.stage = 'closed')::int AS closed
+         FROM grievances g
+         LEFT JOIN users v ON v.id = g.assigned_vendor_id
+         LEFT JOIN grv_staff_profiles p ON p.user_id = g.assigned_vendor_id
+         WHERE ${where} AND g.assigned_vendor_id IS NOT NULL
+         GROUP BY g.assigned_vendor_id, v.name, p.company_name, p.trade
+         ORDER BY p.trade NULLS LAST, vendor_name`,
         params
     );
     return result.rows;
@@ -524,6 +555,7 @@ module.exports = {
     listSubmitterTickets,
     countByStage,
     countByJe,
+    countByVendor,
     transition,
     setTicketFields,
     insertEvent,
