@@ -1,7 +1,7 @@
 const express = require('express');
 const controller = require('./controller');
 const { authenticate, authorize } = require('../../middleware/auth');
-const { checkModuleActive, grievanceUpload } = require('./middleware');
+const { checkModuleActive, grievanceUpload, complaintUpload, MAX_COMPLAINT_PHOTOS } = require('./middleware');
 const { errorResponse } = require('../../utils/response');
 const ROLES = require('../../constants/roles');
 
@@ -19,6 +19,16 @@ const upload = (req, res, next) =>
         return errorResponse(res, message, [], 400);
     });
 
+// Same for the complaint form's photos.
+const uploadPhotos = (req, res, next) =>
+    complaintUpload(req, res, (error) => {
+        if (!error) return next();
+        let message = error.message;
+        if (error.code === 'LIMIT_FILE_SIZE') message = 'Each photo must be 8 MB or smaller.';
+        if (error.code === 'LIMIT_UNEXPECTED_FILE') message = `You can upload up to ${MAX_COMPLAINT_PHOTOS} photos.`;
+        return errorResponse(res, message, [], 400);
+    });
+
 router.use(authenticate);
 
 // Form options (location categories, locations, issue types, stage labels)
@@ -26,7 +36,7 @@ router.get('/meta', authorize(ROLES.FACULTY, ROLES.SUPER_ADMIN, ...STAFF_ROLES),
 router.get('/module-status', authorize(ROLES.FACULTY, ROLES.SUPER_ADMIN, ...STAFF_ROLES), controller.getModuleStatus);
 
 // Faculty: raise and track complaints
-router.post('/tickets', authorize(ROLES.FACULTY), checkModuleActive, upload, controller.submitTicket);
+router.post('/tickets', authorize(ROLES.FACULTY), checkModuleActive, uploadPhotos, controller.submitTicket);
 router.get('/tickets/mine', authorize(ROLES.FACULTY), controller.getMyTickets);
 
 // Role-scoped lists and dashboards (JE inbox, vendor tasks, escalations, director / VC / HOD overview).

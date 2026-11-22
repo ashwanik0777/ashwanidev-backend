@@ -32,4 +32,8 @@ const upload = multer({
 
 const grievanceUpload = upload.single('attachment');
 
-module.exports = { checkModuleActive, grievanceUpload };
+// Faculty complaint form: up to 3 photos as `attachments`.
+const MAX_COMPLAINT_PHOTOS = 3;
+const complaintUpload = upload.array('attachments', MAX_COMPLAINT_PHOTOS);
+
+module.exports = { checkModuleActive, grievanceUpload, complaintUpload, MAX_COMPLAINT_PHOTOS };

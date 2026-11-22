@@ -25,7 +25,7 @@ module.exports = {
     getMeta: handle(async (req, res) => successResponse(res, 'Maintenance form options', await service.getMeta())),
 
     submitTicket: handle(async (req, res) => {
-        const result = await service.submitTicket(req.user, req.body || {}, req.file);
+        const result = await service.submitTicket(req.user, req.body || {}, req.files || []);
         return successResponse(res, 'Grievance submitted successfully', result, 201);
     }),
 

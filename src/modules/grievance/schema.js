@@ -49,6 +49,8 @@ const GRIEVANCE_COLUMNS = [
     `closed_at TIMESTAMPTZ`,
     `attachment_path VARCHAR(500)`,
     `attachment_mime VARCHAR(100)`,
+    // Complaint photos after the first one (the first stays in attachment_path).
+    `extra_attachments JSONB NOT NULL DEFAULT '[]'::jsonb`,
 ];
 
 // Core grievance table, module settings and the VC / HOD role column on users.
