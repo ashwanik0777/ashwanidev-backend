@@ -25,7 +25,7 @@ const buildEmail = ({ recipientName, title, message, ticketId, rows = [] }) => {
     return `
         <div style="font-family:Arial,sans-serif;padding:20px;color:#333;">
             <div style="background-color:#003366;color:white;padding:15px;text-align:center;">
-                <h2 style="margin:0;">GBU Maintenance Grievance Portal</h2>
+                <h2 style="margin:0;">GBU Online Maintenance Portal</h2>
             </div>
             <div style="padding:20px;border:1px solid #ddd;">
                 <p>Dear ${escapeHtml(recipientName || 'User')},</p>
@@ -39,7 +39,7 @@ const buildEmail = ({ recipientName, title, message, ticketId, rows = [] }) => {
                     ${detailRows}
                 </table>
                 ${portalLink}
-                <p style="margin-top:20px;">Regards,<br>Estate &amp; Maintenance Cell, GBU</p>
+                <p style="margin-top:20px;">Regards,<br>GBU IT Cell</p>
             </div>
         </div>`;
 };
@@ -54,12 +54,14 @@ const sendQuietly = (payload) => {
  * In-app notification + email for portal users. Never throws: a failed
  * notification must not roll back the workflow step that triggered it.
  */
-async function notifyUsers(userIds, { ticketId, title, message, rows }) {
+// `email: false` keeps the in-app notification but sends no email.
+async function notifyUsers(userIds, { ticketId, title, message, rows, email = true }) {
     const ids = [...new Set((userIds || []).map(Number).filter(Boolean))];
     if (!ids.length) return;
 
     try {
         await model.insertNotifications(ids, { ticketId, title, message });
+        if (!email) return;
         const users = await model.getUsersByIds(ids);
         for (const user of users) {
             sendQuietly({

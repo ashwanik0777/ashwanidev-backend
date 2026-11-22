@@ -147,11 +147,14 @@ function canView(user, ticket) {
 
 // Vendors visit the site and need the complainant's name, phone and location — not their email or internal paths.
 function presentTicket(ticket, viewer) {
-    const { attachment_path, ...rest } = ticket;
+    const { attachment_path, extra_attachments, ...rest } = ticket;
+    const extraCount = Array.isArray(extra_attachments) ? extra_attachments.length : 0;
     const presented = {
         ...rest,
         stage_label: STAGE_LABELS[ticket.stage] || ticket.stage,
         has_attachment: Boolean(attachment_path),
+        // Complaint photos: 'complaint', then 'complaint-2', 'complaint-3'.
+        attachment_count: attachment_path ? 1 + extraCount : 0,
     };
     if (viewer === 'vendor') delete presented.submitter_email;
     return presented;
@@ -329,6 +332,7 @@ const ACTIONS = {
                         ticketId: ticket.ticket_id,
                         title: 'Work scheduled on your complaint',
                         message: `Expected completion date: ${approvedDate}.`,
+                        email: false,
                     });
                 },
             };
@@ -462,6 +466,7 @@ const ACTIONS = {
                         ticketId: ticket.ticket_id,
                         title: 'Revised completion date',
                         message: `The expected completion date is now ${newDate}.`,
+                        email: false,
                     });
                 },
             };
@@ -690,9 +695,16 @@ async function generateTicketId() {
     throw new Error('Failed to generate unique ticket ID');
 }
 
-async function submitTicket(user, body, file) {
-    let stored = null;
+const COMPLAINT_PHOTO_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+async function submitTicket(user, body, uploadedFiles = []) {
+    const photos = (uploadedFiles || []).slice(0, 3);
+    const storedPhotos = [];
     try {
+        if (photos.some((photo) => !COMPLAINT_PHOTO_TYPES.includes(photo.mimetype))) {
+            throw new GrievanceError('Photos must be JPG, PNG or WEBP images.');
+        }
+
         const categoryKey = cleanText(body.location_category);
         const location = await model.getActiveLocation(requireId(body.location_id, 'Location'), categoryKey);
         if (!location) throw new GrievanceError('Please select a valid location.');
@@ -710,12 +722,15 @@ async function submitTicket(user, body, file) {
         const severity = SEVERITY_LEVELS[severityKey];
         if (!severity) throw new GrievanceError('Please select the severity level (Minor Repair or Major Repair).');
 
-        const contact = optionalText(body.submitter_contact, 'Contact number', 15);
-        if (contact && !/^[0-9+\-\s]{7,15}$/.test(contact)) throw new GrievanceError('Please enter a valid contact number.');
+        const contact = requireText(body.submitter_contact, 'Contact number', 15);
+        if (!/^[0-9+\-\s]{7,15}$/.test(contact)) throw new GrievanceError('Please enter a valid contact number.');
 
         const route = await model.findRoute({ locationCategory: location.category_key, issueType: issue.issue_key, trade: issue.trade });
         const ticketId = await generateTicketId();
-        stored = await files.storeAttachment(file, ticketId);
+        for (const photo of photos) {
+            storedPhotos.push(await files.storeAttachment(photo, ticketId));
+        }
+        const [stored, ...extraPhotos] = storedPhotos;
         const stage = route ? STAGES.PENDING_JE_REVIEW : STAGES.UNROUTED;
 
         await model.createTicket({
@@ -747,6 +762,7 @@ async function submitTicket(user, body, file) {
             assigned_je_id: route?.je_user_id || null,
             attachment_path: stored?.path || null,
             attachment_mime: stored?.mime || null,
+            extra_attachments: JSON.stringify(extraPhotos.map(({ path: filePath, mime }) => ({ path: filePath, mime }))),
             is_student_grievance: false,
         });
 
@@ -793,8 +809,8 @@ async function submitTicket(user, body, file) {
 
         return { ticket_id: ticketId, stage, assigned_je_name: route?.je_name || null };
     } catch (error) {
-        files.removeTemp(file);
-        await files.discardAttachment(stored);
+        (uploadedFiles || []).forEach((photo) => files.removeTemp(photo));
+        for (const photo of storedPhotos) await files.discardAttachment(photo);
         throw error;
     }
 }
@@ -912,8 +928,13 @@ async function getAttachment(user, ticketId, fileId) {
     const { ticket } = await loadVisibleTicket(user, ticketId);
 
     let stored;
+    const extraMatch = /^complaint-([23])$/.exec(String(fileId));
     if (fileId === 'complaint') {
         stored = ticket.attachment_path ? { path: ticket.attachment_path, mime: ticket.attachment_mime, name: `${ticket.ticket_id}-attachment` } : null;
+    } else if (extraMatch) {
+        const index = Number(extraMatch[1]);
+        const extra = Array.isArray(ticket.extra_attachments) ? ticket.extra_attachments[index - 2] : null;
+        stored = extra?.path ? { path: extra.path, mime: extra.mime, name: `${ticket.ticket_id}-attachment-${index}` } : null;
     } else {
         const event = await model.getEventAttachment(ticket.ticket_id, requireId(fileId, 'File'));
         stored = event ? { path: event.attachment_path, mime: event.attachment_mime, name: event.attachment_name } : null;
