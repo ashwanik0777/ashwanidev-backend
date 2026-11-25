@@ -401,7 +401,8 @@ const ACTIONS = {
                     await notifier.notifySubmitter(ticket, {
                         ticketId: ticket.ticket_id,
                         title: 'Your complaint has been resolved',
-                        message: remarks || 'The work has been verified by the JE and the ticket is now closed.',
+                        // JE's closing remarks are internal; the faculty member gets a fixed message.
+                        message: 'The work has been verified by the JE and the ticket is now closed.',
                     });
                     await notifier.notifyUsers([ticket.assigned_vendor_id], {
                         ticketId: ticket.ticket_id,
