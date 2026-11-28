@@ -48,7 +48,8 @@ router.get('/tickets/:ticketId', authorize(VIEWER_ROLES), controller.getTicket);
 router.get('/tickets/:ticketId/files/:fileId', authorize(VIEWER_ROLES), controller.downloadAttachment);
 
 // Workflow step (assign_vendor, submit_inspection, approve_timeline, escalate, ...). Optional photo/PDF as `attachment`.
-router.post('/tickets/:ticketId/actions/:action', authorize(ROLES.SUPER_ADMIN, ...STAFF_ROLES), upload, controller.performAction);
+// Faculty use it only for submit_feedback on their own complaint; the service enforces that.
+router.post('/tickets/:ticketId/actions/:action', authorize(ROLES.SUPER_ADMIN, ROLES.FACULTY, ...STAFF_ROLES), upload, controller.performAction);
 
 router.get('/vendors', authorize(ROLES.JE, ROLES.SENIOR_OFFICER, ROLES.SUPER_ADMIN), controller.listVendors);
 router.get('/me', authorize(STAFF_ROLES), controller.getMe);

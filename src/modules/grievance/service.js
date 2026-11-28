@@ -273,11 +273,14 @@ const ACTIONS = {
                         progress_percent: 100,
                         work_completed_at: visitedAt,
                     },
-                    notify: () => notifier.notifyUsers([ticket.assigned_je_id], {
-                        ticketId: ticket.ticket_id,
-                        title: 'Work completed during inspection',
-                        message: 'The vendor fixed the problem during the site visit. Please review and close the ticket (or request rework).',
-                    }),
+                    notify: async () => {
+                        await notifier.notifyUsers([ticket.assigned_je_id], {
+                            ticketId: ticket.ticket_id,
+                            title: 'Work completed during inspection',
+                            message: 'The vendor fixed the problem during the site visit. The ticket can be closed once the complainant gives feedback (or request rework).',
+                        });
+                        await requestSubmitterFeedback(ticket);
+                    },
                 };
             }
 
@@ -376,10 +379,54 @@ const ACTIONS = {
                 remarks,
                 details: { completed_on_time: onTime },
                 updates: { progress_percent: 100, work_completed_at: completedAt },
+                notify: async () => {
+                    await notifier.notifyUsers([ticket.assigned_je_id], {
+                        ticketId: ticket.ticket_id,
+                        title: 'Vendor marked work as completed',
+                        message: 'Please verify the completed work. The ticket can be closed once the complainant gives feedback.',
+                    });
+                    await requestSubmitterFeedback(ticket);
+                },
+            };
+        },
+    },
+
+    submit_feedback: {
+        role: ROLES.FACULTY,
+        from: [STAGES.WORK_COMPLETED],
+        submitterOnly: true,
+        // Optional photo showing what is still pending (used when not satisfied).
+        allowsAttachment: true,
+        plan: async (ticket, body) => {
+            const rating = Number(body.rating);
+            if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+                throw new GrievanceError('Please rate the work from 1 to 5.');
+            }
+            const satisfied = cleanText(body.satisfied);
+            if (satisfied !== 'yes' && satisfied !== 'no') {
+                throw new GrievanceError('Please tell us whether the problem has been resolved.');
+            }
+            const isSatisfied = satisfied === 'yes';
+            const comments = isSatisfied
+                ? optionalText(body.remarks, 'Comments')
+                : requireText(body.remarks, 'Please describe what is still pending');
+            return {
+                toStage: STAGES.WORK_COMPLETED,
+                event: 'feedback_submitted',
+                remarks: comments,
+                details: { rating, satisfied: isSatisfied },
+                updates: {
+                    submitter_rating: rating,
+                    submitter_satisfied: isSatisfied,
+                    submitter_feedback: comments,
+                    submitter_feedback_at: new Date(),
+                },
                 notify: () => notifier.notifyUsers([ticket.assigned_je_id], {
                     ticketId: ticket.ticket_id,
-                    title: 'Vendor marked work as completed',
-                    message: 'Please verify the completed work.',
+                    title: isSatisfied ? 'Complainant confirmed the work' : 'Complainant says the problem is not resolved',
+                    message: isSatisfied
+                        ? `Rating: ${rating}/5. You can now verify and close the ticket.`
+                        : `Rating: ${rating}/5. ${comments} Please review and request rework if needed.`,
                 }),
             };
         },
@@ -388,7 +435,11 @@ const ACTIONS = {
     mark_resolved: {
         role: ROLES.JE,
         from: [STAGES.WORK_COMPLETED],
+        requiresFeedback: true,
         plan: async (ticket, body) => {
+            if (!ticket.submitter_feedback_at) {
+                throw new GrievanceError('The complainant has not given feedback yet. The ticket can be closed only after their feedback.', 409);
+            }
             const remarks = optionalText(body.remarks, 'Remarks');
             const now = new Date();
             return {
@@ -435,6 +486,10 @@ const ACTIONS = {
                     rework_count: (ticket.rework_count || 0) + 1,
                     work_completed_at: null,
                     approved_completion_date: newDate,
+                    submitter_rating: null,
+                    submitter_satisfied: null,
+                    submitter_feedback: null,
+                    submitter_feedback_at: null,
                 },
                 notify: () => notifier.notifyUsers([ticket.assigned_vendor_id], {
                     ticketId: ticket.ticket_id,
@@ -611,6 +666,15 @@ const ACTIONS = {
     },
 };
 
+// Asks the complainant (in-app and by email) whether they are satisfied with the work.
+function requestSubmitterFeedback(ticket) {
+    return notifier.notifySubmitter(ticket, {
+        ticketId: ticket.ticket_id,
+        title: 'Please give your feedback on the completed work',
+        message: 'The vendor has reported the work on your complaint as completed. Please check the work and share your feedback on the GBU Online Maintenance Portal — whether you are satisfied or not. Your complaint will be closed only on the basis of your feedback.',
+    });
+}
+
 // Only the assigned JE / vendor may act on a ticket.
 const ownerColumnForRole = {
     [ROLES.JE]: 'assigned_je_id',
@@ -621,6 +685,11 @@ function allowedActionsFor(user, ticket) {
     return Object.entries(ACTIONS)
         .filter(([, action]) => {
             if (action.role !== user.role || !action.from.includes(ticket.stage)) return false;
+            // Feedback: only the person who raised the complaint, once per completion.
+            if (action.submitterOnly) {
+                return String(ticket.submitter_id) === String(user.sub) && !ticket.submitter_feedback_at;
+            }
+            if (action.requiresFeedback && !ticket.submitter_feedback_at) return false;
             const ownerColumn = ownerColumnForRole[user.role];
             return !ownerColumn || ticket[ownerColumn] === Number(user.sub);
         })

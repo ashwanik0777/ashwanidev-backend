@@ -25,6 +25,7 @@ const UPDATABLE_COLUMNS = new Set([
     'escalated_from_stage', 'escalation_reason', 'escalation_count', 'escalation_decision', 'escalation_remarks',
     'escalation_decided_by', 'escalation_decided_at', 'rework_count', 'closed_at', 'resolved_at',
     'admin_remark', 'assigned_to',
+    'submitter_rating', 'submitter_satisfied', 'submitter_feedback', 'submitter_feedback_at',
 ]);
 
 /* ─── Lookups ─── */

@@ -51,6 +51,11 @@ const GRIEVANCE_COLUMNS = [
     `attachment_mime VARCHAR(100)`,
     // Complaint photos after the first one (the first stays in attachment_path).
     `extra_attachments JSONB NOT NULL DEFAULT '[]'::jsonb`,
+    // Complainant's feedback once the vendor reports the work done; the JE can close only after it.
+    `submitter_rating SMALLINT`,
+    `submitter_satisfied BOOLEAN`,
+    `submitter_feedback TEXT`,
+    `submitter_feedback_at TIMESTAMPTZ`,
 ];
 
 // Core grievance table, module settings and the VC / HOD role column on users.
